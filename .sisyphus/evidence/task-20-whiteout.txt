@@ -1,0 +1,107 @@
+Task 20 Evidence: File deletion with whiteout markers
+======================================================
+
+Implementation Complete
+-----------------------
+
+Files Modified:
+- src/mcp_scratchpad/fs/overlay.py
+- tests/unit/fs/test_overlay.py
+
+Whiteout Convention
+-------------------
+- Marker format: .wh.<filename>
+- Example: deleting /dir/file.txt creates .wh.file.txt in upper layer
+
+New Methods in OverlayFileSystem
+--------------------------------
+
+1. _get_whiteout_path(path: str) -> str
+   - Returns the whiteout marker path for a given file path
+   - Example: /file.txt -> /.wh.file.txt
+
+2. _has_whiteout(path: str) -> bool
+   - Checks if a whiteout marker exists in upper layer
+
+3. _get_whited_out_files(dir_path: str) -> set[str]
+   - Returns set of filenames with whiteout markers in a directory
+
+4. _create_whiteout(path: str) -> None
+   - Creates empty whiteout marker file in upper layer
+   - Creates parent directories as needed
+
+5. _resolve_without_whiteout(path) -> tuple | None
+   - Internal resolve that ignores whiteout markers
+   - Used by exists() and rm() for proper layering semantics
+
+6. rm(path: str, **kwargs) -> None
+   - Removes file with whiteout support:
+     * If file in upper layer: deletes it directly
+     * If file in lower layer only: creates whiteout marker
+     * If already whited-out: idempotent (no-op)
+   - Raises FileNotFoundError if path doesn't exist
+   - Raises IsADirectoryError for directories
+
+Modified Methods
+----------------
+
+1. ls(path: str) -> list[str]
+   - Now filters out:
+     * .wh.* marker files (hidden from view)
+     * Files that have whiteout markers (appear deleted)
+
+2. exists(path: str) -> bool
+   - Now returns False if whiteout marker exists for path
+   - Whiteout markers hide files from lower layers
+
+3. _resolve(path: str) -> tuple | None
+   - Now returns None if whiteout marker exists
+   - Path is considered non-existent when whited-out
+
+Tests Added (26 tests)
+----------------------
+
+TestOverlayWhiteout class (22 tests):
+- Whiteout path helpers (4 tests)
+- Whiteout existence checks (3 tests)
+- Whiteout creation (2 tests)
+- rm() functionality (5 tests)
+- exists() with whiteouts (3 tests)
+- ls() with whiteout filtering (3 tests)
+- _resolve() with whiteouts (2 tests)
+
+TestOverlayWhiteoutQAScenarios class (4 tests):
+- test_whiteout_hides_lower_layer_file
+- test_rm_deletes_upper_layer_file_no_whiteout
+- test_ls_filters_completely
+- test_exists_returns_false_with_whiteout
+
+Test Results
+------------
+All 26 whiteout tests pass:
+- Tests for rm() with upper layer deletion
+- Tests for rm() with lower layer whiteout creation
+- Tests for ls() filtering whiteout markers and whited-out files
+- Tests for exists() returning False for whited-out files
+- Tests for idempotent rm() on already whited-out files
+
+MockFileSystem Enhancements
+---------------------------
+Added to support testing:
+- rm_file(path) method for file deletion
+- ls(path) method for directory listing
+
+QA Scenario Verified
+--------------------
+```
+Scenario: Whiteout hides lower layer file
+  Steps:
+    1. lower.write_text("/file.txt", "content")
+    2. overlay = OverlayFileSystem(upper, [lower])
+    3. overlay.rm("/file.txt")
+    4. assert not overlay.exists("/file.txt")
+    5. assert lower.exists("/file.txt")  # lower unchanged
+    6. assert ".wh.file.txt" in upper.ls("/")
+  Expected: File appears deleted, lower unchanged, marker created
+  Result: PASSED
+```

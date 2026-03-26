@@ -1,0 +1,152 @@
+# Task 31: Memory Pressure Handling for OverlayFileSystem - Evidence
+
+## Implementation Summary
+
+Successfully implemented memory pressure handling for OverlayFileSystem with the following features:
+
+### 1. Memory Usage Monitoring
+- Added `_estimate_memory_usage()` method to track upper layer memory consumption
+- Works with MemoryFileSystem and other fsspec filesystems
+- Tracks file contents, not metadata overhead
+
+### 2. Automatic Cache Eviction
+- Implemented `_evict_files_to_target()` for LRU eviction (oldest files first)
+- Auto-eviction triggers at critical threshold (default 90%)
+- Target eviction reduces to 70% of max memory (configurable)
+- Files are removed from upper layer when memory pressure detected
+
+### 3. Memory Limits Configuration
+- `MemoryPressureConfig` dataclass with validation:
+  - `max_memory_bytes`: Hard limit (0 = unlimited)
+  - `warning_threshold`: Warning level (default 80%)
+  - `critical_threshold`: Critical level triggering eviction (default 90%)
+  - `auto_evict`: Enable/disable automatic eviction
+  - `evict_to_target`: Target level after eviction (default 70%)
+
+### 4. Graceful Degradation
+- `_check_memory_pressure()` monitors usage and triggers warnings/eviction
+- `MemoryPressureError` raised when operations would exceed limits
+- System degrades by slowing down (eviction overhead) rather than crashing
+- Warnings issued at warning threshold (ResourceWarning)
+
+### 5. Memory Usage Reporting
+- `MemoryStats` dataclass provides:
+  - Current/max usage in bytes
+  - Usage percentage
+  - Pressure status (is_under_pressure)
+  - File count, largest file size, average size
+  - Eviction count and last eviction timestamp
+- `to_dict()` for serialization
+
+### 6. Public API
+- `get_memory_stats()` - Get current memory statistics
+- `evict_oldest_files(count)` - Manual eviction
+- `set_memory_config(config)` - Update configuration
+- Memory config passed via constructor
+
+## Test Results
+
+Manual test suite executed successfully:
+
+```
+=== TEST SUITE FOR MEMORY PRESSURE ===
+Test 1: Basic memory tracking...
+   PASSED: Memory tracking works
+Test 2: Memory pressure detection...
+   PASSED: Pressure detection works
+Test 3: Auto-eviction at critical threshold...
+   PASSED: Auto-eviction works
+Test 4: Manual eviction...
+   PASSED: Evicted ['/file1.txt']
+Test 5: Memory pressure error...
+   PASSED: Error caught with correct values
+Test 6: Memory stats serialization...
+   PASSED: to_dict works
+Test 7: Update memory config...
+   PASSED: Config updated
+
+=== ALL TESTS PASSED ===
+```
+
+## Code Verification
+
+### Methods Added to OverlayFileSystem:
+- `_estimate_memory_usage()` - Memory estimation
+- `_get_files_sorted_by_age()` - LRU ordering
+- `_collect_files_with_mtime()` - File collection helper
+- `_evict_files_to_target()` - Eviction implementation
+- `_check_memory_pressure()` - Pressure detection
+- `_check_memory_limit()` - Limit enforcement
+- `get_memory_stats()` - Public stats API
+- `_collect_file_stats()` - Stat collection
+- `evict_oldest_files()` - Manual eviction API
+- `set_memory_config()` - Config update API
+
+### New Classes:
+- `MemoryPressureError` - Exception for limit violations
+- `MemoryPressureConfig` - Configuration dataclass
+- `MemoryStats` - Statistics dataclass
+
+### Modified Methods:
+- `__init__` - Added memory_config parameter and tracking state
+- `_copy_up` - Added memory limit checking before COW operations
+
+## Integration
+
+Classes exported from `mcp_scratchpad.fs`:
+```python
+from mcp_scratchpad.fs import (
+    OverlayFileSystem,
+    MemoryPressureConfig,
+    MemoryPressureError,
+    MemoryStats,
+)
+```
+
+## Example Usage
+
+```python
+from mcp_scratchpad.fs import OverlayFileSystem, MemoryPressureConfig
+from fsspec.implementations.memory import MemoryFileSystem
+
+# Create overlay with memory limits
+config = MemoryPressureConfig(
+    max_memory_bytes=100 * 1024 * 1024,  # 100MB
+    warning_threshold=0.8,
+    critical_threshold=0.9,
+    auto_evict=True,
+    evict_to_target=0.7,
+)
+
+overlay = OverlayFileSystem(
+    upper=MemoryFileSystem(),
+    lowers=[MemoryFileSystem()],
+    memory_config=config,
+)
+
+# Check memory stats
+stats = overlay.get_memory_stats()
+print(f"Usage: {stats.current_usage_bytes} bytes")
+print(f"Under pressure: {stats.is_under_pressure}")
+
+# Manual eviction
+overlay.evict_oldest_files(count=5)
+```
+
+## Files Modified
+- `src/mcp_scratchpad/fs/overlay.py` - Main implementation
+- `src/mcp_scratchpad/fs/__init__.py` - Added exports
+
+## Files Added
+- `tests/unit/fs/test_memory_pressure.py` - Test suite
+
+## Compliance with Requirements
+
+- [x] Memory usage is monitored and reported
+- [x] Cache automatically evicts under memory pressure
+- [x] Memory limits can be configured
+- [x] System degrades gracefully (slows down, doesn't crash)
+- [x] Tests demonstrate memory pressure handling
+- [x] Evidence file created
+
+Date: 2026-03-19

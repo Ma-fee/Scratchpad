@@ -1,0 +1,55 @@
+[project]
+name = "iroot-llm"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10,<=3.12"
+# dependencies = ["torch>=2.4"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+environments = [
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+exclude = ["packages/xeno-serve", "mineru-api", "packages/mcp-scratchpad"]
+
+[tool.uv.sources]
+# torch = [
+  # { index = "torch-cpu", marker = "platform_system == 'Darwin' and platform_machine == 'arm'" },
+  # { index = "torch-cu124", marker = "platform_system == 'Linux'" },
+# ]
+# torchvision = [
+#   { index = "torch-cpu", marker = "platform_system == 'Darwin' and platform_machine == 'arm'" },
+#   { index = "torch-cu124", marker = "platform_system == 'Linux'" },
+# ]
+
+# [[tool.uv.index]]
+# name = "torch-cpu"
+# url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cpu"
+# explicit = true
+# format = "flat"
+
+
+# [[tool.uv.index]]
+# name = "torch-cu121"
+# url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cu121"
+# explicit = true
+# format = "flat"
+
+# [[tool.uv.index]]
+# name = "torch-cu124"
+# url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cu124"
+# explicit = true
+# format = "flat"
+
+[dependency-groups]
+dev = [
+    "factory-boy",
+]

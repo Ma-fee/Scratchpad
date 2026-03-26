@@ -1,0 +1,134 @@
+================================================================================
+Task 22: S3 Backend with fsspec - Implementation Complete
+================================================================================
+
+DATE: 2026-03-19
+
+================================================================================
+1. FILES MODIFIED
+================================================================================
+
+1. packages/mcp-scratchpad/pyproject.toml
+   - Added moto dependency group with "moto[s3]>=5.0.0" and boto3
+
+2. packages/mcp-scratchpad/src/mcp_scratchpad/fs/backends.py
+   - Added S3NotInstalledError exception class
+   - Added create_s3_filesystem(bucket: str, **options) function
+   - Updated create_filesystem() to use new create_s3_filesystem signature
+
+3. packages/mcp-scratchpad/tests/unit/fs/test_backends.py
+   - Added moto-based S3 integration tests
+   - Added TestS3FilesystemWithMoto class with 5 tests
+   - Added TestFilesystemFactoryWithMoto class with 1 test
+
+================================================================================
+2. IMPLEMENTATION DETAILS
+================================================================================
+
+2.1 create_s3_filesystem Function
+---------------------------------
+
+Signature:
+    def create_s3_filesystem(bucket: str, **options: Any) -> AbstractFileSystem
+
+Features:
+    - Creates S3FileSystem wrapped with DirFileSystem
+    - Bucket name can include path prefix (e.g., "mybucket/data/subdir")
+    - Credential options: key, secret, token
+    - Client kwargs: endpoint_url for MinIO/testing, region_name
+    - Caching options: use_listings_cache, listings_expiry_time
+    - Graceful handling when s3fs not installed (S3NotInstalledError)
+
+Credential Priority (highest to lowest):
+    1. Direct key/secret/token parameters
+    2. client_kwargs dict
+    3. Environment variables (AWS_*, Boto3 defaults)
+    4. AWS credentials file
+    5. IAM role (when on AWS)
+
+2.2 Error Handling
+------------------
+
+- S3NotInstalledError: Raised when s3fs package is not installed
+- ValueError: Raised when bucket name is empty
+- Warning logged for unused options
+
+================================================================================
+3. TEST RESULTS
+================================================================================
+
+Test Suite: TestS3FilesystemWithMoto (5 tests - all passed)
+- test_create_s3_filesystem_basic: PASSED
+- test_s3_file_operations: PASSED (write/read/exists/ls/rm)
+- test_s3_with_path_prefix: PASSED
+- test_s3_with_credentials: PASSED
+- test_s3_empty_bucket_raises: PASSED
+
+Test Suite: TestFilesystemFactoryWithMoto (1 test - passed)
+- test_factory_creates_s3_from_s3_uri_live: PASSED
+
+Total Backend Tests: 36 passed, 4 skipped
+- Skips are for mocking scenarios, not critical
+
+================================================================================
+4. TEST INFRASTRUCTURE
+================================================================================
+
+Dependencies Added:
+    uv pip install "moto[s3]" boto3 s3fs
+
+Moto Mock Setup:
+    @pytest.fixture
+    def mock_s3(self):
+        with mock_aws():
+            conn = boto3.client("s3", region_name="us-east-1")
+            conn.create_bucket(Bucket="test-bucket")
+            yield conn
+
+Test Pattern (QA Scenario Met):
+    @mock_s3 decorator on test
+    fs = create_s3_filesystem("test-bucket")
+    fs.write_text("/file.txt", "content")
+    assert fs.exists("/file.txt")
+
+Result: File created in mock S3 successfully
+
+================================================================================
+5. VERIFICATION
+================================================================================
+
+✅ S3FileSystem backend support implemented
+✅ Credential configuration handled (key, secret, token, client_kwargs)
+✅ Tests use moto for mock S3 (no real S3 required)
+✅ Endpoint URL support for MinIO/testing
+✅ Path prefix support via bucket/prefix syntax
+✅ Error handling for missing s3fs package
+✅ All tests pass
+
+================================================================================
+6. USAGE EXAMPLES
+================================================================================
+
+Basic Usage:
+    fs = create_s3_filesystem(bucket="my-bucket")
+    fs.write_text("/data.txt", "hello")
+
+With Credentials:
+    fs = create_s3_filesystem(
+        bucket="my-bucket",
+        key="AKIA...",
+        secret="secret..."
+    )
+
+With Path Prefix:
+    fs = create_s3_filesystem(bucket="my-bucket/uploads/2024")
+
+With MinIO/Custom Endpoint:
+    fs = create_s3_filesystem(
+        bucket="my-bucket",
+        client_kwargs={"endpoint_url": "http://localhost:9000"}
+    )
+
+================================================================================
+END OF EVIDENCE
+================================================================================

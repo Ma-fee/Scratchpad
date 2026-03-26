@@ -1,0 +1,69 @@
+# Task 14 Evidence: Multi-layer Path Resolution
+
+## Implementation Summary
+
+Successfully implemented `_resolve()` method for OverlayFileSystem which finds files across multiple layers with proper priority handling.
+
+## Files Modified
+
+1. `src/mcp_scratchpad/fs/overlay.py` - Added `_resolve()` method and helper functions
+2. `tests/unit/fs/test_overlay.py` - Added comprehensive tests
+
+## Implementation Details
+
+### `_resolve(path: str) -> tuple[AbstractFileSystem, str, int] | None`
+
+Returns a tuple of (filesystem, relative_path, layer_index) if found:
+- `layer_index = 0`: Upper layer (highest priority)
+- `layer_index = 1, 2, ...`: Lower layers in priority order
+- Returns `None` if file not found in any layer
+
+### Resolution Order
+1. Check upper layer first (read-write, highest priority)
+2. Check lower layers in order (read-only, first in list = higher priority)
+3. Return first match found
+
+### Helper Functions Added
+
+1. `_normalize_path(path: str) -> str`: Normalizes paths to start with '/'
+2. `_exists_in_layer(fs, path) -> bool`: Checks if path exists in specific layer
+3. `_get_layer_fs(layer_index: int) -> AbstractFileSystem`: Gets filesystem for layer index
+
+## Test Results
+
+All 67 tests pass:
+- TestPathNormalization: 5 tests
+- TestOverlayResolve: 13 tests (file in upper, lower, nonexistent, deep paths, etc.)
+- TestOverlayGetLayerFs: 5 tests
+- TestOverlayExistsInLayer: 3 tests
+- TestOverlayResolveQAScenarios: 6 QA scenario tests
+- Existing tests continued to pass
+
+## QA Scenario Results
+
+```
+Multi-layer resolution
+  Steps:
+    1. upper = MockFileSystem()
+    2. lower = MockFileSystem()
+    3. lower.write_text("/test.txt", "lower")
+    4. upper.write_text("/test.txt", "upper")
+    5. overlay = OverlayFileSystem(upper, [lower])
+    6. fs, path, idx = overlay._resolve("/test.txt")
+  Expected: idx == 0 (upper layer)
+  Result: PASS - idx == 0 ✓
+```
+
+## MockFileSystem for Testing
+
+Created MockFileSystem class with instance-specific storage for proper test isolation, since MemoryFileSystem uses shared class-level storage.
+
+## Key Behaviors Verified
+
+1. ✓ File in upper layer returns layer_index = 0
+2. ✓ File only in lower layer returns correct layer_index (1, 2, ...)
+3. ✓ File in multiple layers returns highest priority (upper > lower1 > lower2)
+4. ✓ Non-existent file returns None
+5. ✓ Deep paths resolve correctly (/a/b/c.txt)
+6. ✓ Path normalizes correctly (test.txt -> /test.txt)
+7. ✓ Directories resolve same as files

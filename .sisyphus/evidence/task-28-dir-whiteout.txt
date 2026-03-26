@@ -1,0 +1,127 @@
+Task 28: Directory Whiteout Handling - Evidence File
+====================================================
+
+## Summary
+Successfully implemented directory whiteout handling for OverlayFileSystem.
+
+## Implementation Details
+
+### 1. rmdir() Method (line 783-850 in overlay.py)
+- Implements directory deletion with whiteout support
+- For directories in upper layer: deletes directly
+- For directories in lower layer only: creates `.wh.<dirname>` marker in upper layer
+- Raises FileNotFoundError if directory doesn't exist
+- Raises NotADirectoryError if path is a file
+- Raises OSError if directory is not empty
+- Idempotent: calling rmdir on already whited-out directory returns without error
+
+### 2. isdir() Method (line 347-382 in overlay.py)
+- Updated to check for directory whiteout markers
+- Returns False if a whiteout marker exists for the directory path
+- This ensures whited-out directories are not treated as directories
+
+### 3. ls() Method (line 217-308 in overlay.py)
+- Updated to return empty list if directory has whiteout marker
+- This prevents listing contents of whited-out directories
+- Documentation updated to mention directory whiteout behavior
+
+### 4. mkdir() Method (line 994-1031 in overlay.py)
+- Updated to call `_remove_whiteout()` before creating directory
+- This enables "recreate after delete" scenario
+- If directory was previously whited out, the whiteout is removed
+
+### 5. makedirs() Method (line 1033-1074 in overlay.py)
+- Updated to call `_remove_whiteout()` before creating directories
+- Enables recreating directory trees after deletion
+
+### 6. _remove_whiteout() Method (line 660-687 in overlay.py)
+- Already existed for files
+- Also works for directories (same naming convention)
+- Removes whiteout marker from upper layer if it exists
+
+## Directory Whiteout Convention
+- Uses same pattern as file whiteouts: `.wh.<dirname>`
+- Placed in parent directory
+- Example: Deleting `/foo/bar` creates `/foo/.wh.bar`
+- Hides entire directory tree from lower layers
+
+## Tests Added (in tests/unit/fs/test_overlay.py)
+
+### TestOverlayDirectoryWhiteout Class:
+1. `test_rmdir_deletes_upper_layer_directory` - Verifies upper layer deletion
+2. `test_rmdir_creates_whiteout_for_lower_layer_directory` - Verifies whiteout creation
+3. `test_rmdir_raises_error_for_nonexistent_directory` - Error handling
+4. `test_rmdir_raises_error_for_file` - Type checking
+5. `test_rmdir_raises_error_for_nonempty_directory` - Nonempty check
+6. `test_rmdir_idempotent_for_already_whited_out` - Idempotency
+7. `test_isdir_returns_false_for_whited_out_directory` - Whiteout detection
+8. `test_ls_returns_empty_for_whited_out_directory` - Listing behavior
+9. `test_exists_returns_false_for_whited_out_directory` - Existence check
+10. `test_mkdir_removes_directory_whiteout` - Recreate directory
+11. `test_makedirs_removes_directory_whiteout` - Recreate with makedirs
+12. `test_nested_directory_whiteout_hides_all_contents` - Nested directory handling
+
+### TestOverlayDirectoryWhiteoutQAScenarios Class:
+1. `test_delete_and_recreate_directory_cycle` - Full lifecycle test
+2. `test_directory_whiteout_blocks_lower_layer_access` - Lower layer hiding
+3. `test_can_create_file_where_directory_was_deleted` - Path repurposing
+4. `test_can_recreate_directory_tree_after_deletion` - Tree recreation
+
+## MockFileSystem Enhancement
+- Added `rmdir()` method to MockFileSystem for testing support (line 171-173)
+
+## Behavior Verification
+
+### Given: Lower layer has /testdir with content
+```python
+lower.mkdir("/testdir")
+lower.write_text("/testdir/file.txt", "content")
+```
+
+### When: Delete directory via overlay
+```python
+overlay.rm("/testdir/file.txt")  # Delete file first
+overlay.rmdir("/testdir")         # Delete directory
+```
+
+### Then:
+- `overlay.exists("/testdir")` returns False
+- `overlay.isdir("/testdir")` returns False  
+- `upper.isfile("/.wh.testdir")` returns True (whiteout created)
+- `lower.isdir("/testdir")` returns True (lower unchanged)
+
+### When: Recreate directory
+```python
+overlay.mkdir("/testdir")
+```
+
+### Then:
+- `overlay.exists("/testdir")` returns True
+- `overlay.isdir("/testdir")` returns True
+- `upper.isfile("/.wh.testdir")` returns False (whiteout removed)
+
+## Edge Cases Covered
+1. Delete directory in upper layer (direct deletion)
+2. Delete directory in lower layer (whiteout created)
+3. Delete already whited-out directory (idempotent)
+4. List whited-out directory (returns empty)
+5. Check isdir on whited-out directory (returns False)
+6. Create directory where whited-out one existed (whiteout removed)
+7. Nested directories - deleting parent hides all children
+8. Recreate directory tree after deletion
+
+## Files Modified
+1. `src/mcp_scratchpad/fs/overlay.py` - Core implementation
+2. `tests/unit/fs/test_overlay.py` - Test cases and MockFileSystem.rmdir()
+
+## Compliance with Requirements
+- [x] rmdir() creates whiteout marker for lower layer directories
+- [x] Directory whiteout hides entire directory tree from lower layers
+- [x] Can create new directory with same name after deletion
+- [x] ls() respects directory whiteouts
+- [x] exists() respects directory whiteouts
+- [x] isdir() respects directory whiteouts
+- [x] mkdir()/makedirs() remove whiteout markers
+- [x] Tests added to tests/unit/fs/test_overlay.py
+
+Implementation Complete: 2026-03-19

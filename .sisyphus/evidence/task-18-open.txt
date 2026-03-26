@@ -1,0 +1,71 @@
+# Task 18: open() Method Implementation Evidence
+
+## Implementation Summary
+
+Successfully implemented `open()` method in `OverlayFileSystem` with:
+- Write mode detection (`_is_write_mode()` helper)
+- COW triggering for write operations on lower layer files
+- Support for all standard file modes: r, w, a, x, and + variants
+- Binary and text mode support
+- Parent directory creation for new files
+
+## Files Modified
+
+1. `src/mcp_scratchpad/fs/overlay.py`
+   - Added `_is_write_mode(self, mode: str) -> bool` helper
+   - Added `open(self, path: str, mode: str = "r", **kwargs) -> Any` method
+
+2. `tests/unit/fs/test_overlay.py`
+   - Added `TestIsWriteMode` class (10 tests)
+   - Added `TestOverlayOpenRead` class (5 tests)
+   - Added `TestOverlayOpenWrite` class (4 tests)
+   - Added `TestOverlayOpenAppend` class (2 tests)
+   - Added `TestOverlayOpenUpdateModes` class (2 tests)
+   - Added `TestOverlayOpenQAScenarios` class (6 tests)
+
+## QA Scenario: Write mode triggers COW
+
+**Steps:**
+1. lower.write_text("/file.txt", "original")
+2. overlay = OverlayFileSystem(upper, [lower])
+3. with overlay.open("/file.txt", "w") as f:
+     f.write("modified")
+4. assert upper._store["/file.txt"] == b"modified"
+5. assert lower._store["/file.txt"] == b"original"
+
+**Result:** COW triggered, upper modified, lower unchanged ✓
+
+## Supported Modes
+
+| Mode | Description | COW Trigger | Target Layer |
+|------|-------------|-------------|--------------|
+| r    | Read only   | No          | Resolved     |
+| rb   | Binary read | No          | Resolved     |
+| w    | Write       | Yes         | Upper        |
+| wb   | Binary write| Yes         | Upper        |
+| a    | Append      | Yes         | Upper        |
+| ab   | Binary append| Yes        | Upper        |
+| r+   | Read+write  | Yes         | Upper        |
+| w+   | Write+read  | Yes         | Upper        |
+| a+   | Append+read | Yes         | Upper        |
+
+## Test Coverage
+
+- Write mode detection: 10 tests
+- Read operations: 5 tests
+- Write operations: 4 tests
+- Append operations: 2 tests
+- Update modes: 2 tests
+- QA scenarios: 6 tests
+
+Total: 29 new tests added
+
+## Verification
+
+All tests pass successfully. The open() method correctly:
+- Reads from resolved layer (upper first, then lowers)
+- Triggers COW when writing to lower layer files
+- Creates new files in upper layer
+- Creates parent directories when needed
+- Preserves lower layer immutability
+- Supports all standard file modes

@@ -1,0 +1,70 @@
+Task 12: Cache Memory Management and LRU Eviction
+===================================================
+
+Date: 2026-03-19
+
+Implementation Summary:
+----------------------
+Added memory management features to DirectoryIndexCache:
+
+1. CacheStats Dataclass
+   - hits: int - Number of successful cache lookups
+   - misses: int - Number of failed cache lookups  
+   - evictions: int - Number of entries evicted
+   - hit_rate: float (property) - Percentage of hits
+   - total_lookups: int (property) - Total lookups
+
+2. Memory Estimation
+   - _estimate_size(entries: list[str]) -> int
+   - Rough estimation: sum of string lengths + overhead
+   - _ENTRY_OVERHEAD_BYTES = 200 bytes per entry
+   - String overhead: 49 bytes per string
+
+3. LRU Tracking
+   - Uses collections.OrderedDict to maintain access order
+   - accessed_at field added to CacheEntry
+   - _update_access_time() moves entry to end (MRU) on get()
+   - First item in OrderedDict is always LRU
+
+4. Memory Pressure Handling
+   - max_memory_bytes parameter in CacheConfig (0 = unlimited)
+   - _evict_for_memory() removes LRU entries until under limit
+   - Entries too large for limit are not cached
+
+5. Enhanced get_stats()
+   - Added: hits, misses, evictions, hit_rate, total_lookups
+   - Added: memory_usage_bytes, max_memory_bytes
+
+Files Modified:
+--------------
+- src/mcp_scratchpad/fs/cache.py
+- tests/unit/fs/test_cache.py
+
+Test Results:
+-------------
+✓ Memory estimation: 371 bytes for 3 entries
+✓ CacheStats work correctly
+✓ Hit/miss tracking works
+✓ LRU eviction works correctly
+✓ Memory limit eviction works, current usage: 299 bytes
+✓ CacheEntry has accessed_at field
+✓ max_memory_bytes config works
+✓ get_stats includes all memory/LRU fields
+
+QA Scenario: LRU eviction with memory limit
+==========================================
+- Set memory limit to 800 bytes
+- Added 5 cache entries of varying sizes
+- Verified LRU entries evicted first
+- Memory usage: 789 bytes (under limit)
+- Evictions: 2 (tracked correctly)
+- Hit rate: 100.0% (tracked correctly)
+RESULT: PASSED
+
+Implementation Details:
+----------------------
+- LRU eviction preserves most recently accessed entries
+- Memory estimation is conservative (over-estimates slightly)
+- Statistics tracked in real-time during operations
+- No external dependencies required
+- Backward compatible with existing code

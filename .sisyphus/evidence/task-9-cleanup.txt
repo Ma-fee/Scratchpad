@@ -1,0 +1,181 @@
+Task 9: Session Cleanup and Resource Management - Implementation Evidence
+============================================================================
+
+Files Modified:
+- /Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad/src/mcp_scratchpad/fs/session_manager.py
+- /Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad/tests/unit/fs/test_session_manager.py
+
+Implementation Details:
+=======================
+
+1. Session Tracking Enhancements:
+   - Added _session_metadata dict to track SessionMetadata per session
+   - Added _last_accessed dict to track last access timestamps
+   - Modified create_session() to accept optional metadata dict
+   - Modified create_session() to initialize SessionMetadata with creation time
+   - Modified create_session() to track initial last_accessed timestamp
+
+2. Enhanced get_session_fs():
+   - Updates last_accessed timestamp on each access
+   - Updates SessionMetadata.last_accessed as well
+
+3. Enhanced cleanup_session():
+   - Returns True if session was found and cleaned up
+   - Returns False if session already cleaned/didn't exist (idempotent)
+   - Clears MemoryFileSystem store contents (fs.store.clear())
+   - Closes any open file handles in fs._cache
+   - Removes session from all tracking dicts:
+     * _sessions
+     * _last_accessed
+     * _session_metadata
+
+4. New Expiration Tracking Methods:
+   - is_session_expired(session_id, timeout_seconds) -> bool
+     * Returns False for active session within timeout
+     * Returns True for session exceeded timeout
+     * Returns True for non-existent session
+   - get_expired_sessions(timeout_seconds) -> list[str]
+     * Returns all session IDs that have exceeded the timeout
+   - get_session_metadata(session_id) -> SessionMetadata | None
+     * Returns SessionMetadata if session exists
+   - update_session_access(session_id) -> bool
+     * Manually updates last_accessed timestamp
+     * Returns True if successful, False if session doesn't exist
+
+Test Results:
+=============
+
+Test Suite: tests/unit/fs/test_session_manager.py
+Total: 41 tests (39 passed, 2 xfailed)
+
+New Tests Added (18 tests):
+- test_cleanup_returns_true_for_existing_session
+- test_cleanup_returns_false_for_nonexistent_session
+- test_double_cleanup_returns_false
+- test_cleanup_clears_memory_fs_store
+- test_cleanup_closes_open_file_handles
+- test_cleanup_removes_from_all_tracking_dicts
+- test_cannot_access_session_after_cleanup
+- test_is_session_expired_returns_false_for_active_session
+- test_is_session_expired_returns_true_for_timed_out_session
+- test_is_session_expired_returns_true_for_nonexistent_session
+- test_get_expired_sessions_returns_empty_list_initially
+- test_get_expired_sessions_returns_expired_only
+- test_update_session_access_updates_timestamp
+- test_update_session_access_returns_false_for_nonexistent
+- test_get_session_metadata_returns_metadata
+- test_get_session_metadata_returns_none_for_nonexistent
+- test_get_session_fs_updates_last_accessed
+
+Verification Commands:
+======================
+
+QA Scenario Test:
+
+
+QA Scenario Test Output:
+========================
+
+============================================================
+QA Scenario: Session Cleanup
+============================================================
+
+1. Creating SessionFileSystemManager...
+   ✓ Manager created
+
+2. Creating session...
+   ✓ Session created: 2a249929...
+
+3. Verifying session exists...
+   ✓ Session filesystem retrieved: MemoryFileSystem
+   ✓ Sessions list: ['2a249929-e03c-4bfb-aee3-65e2e86932b8']
+
+4. Cleaning up session...
+   ✓ Cleanup returned: True
+
+5. Verifying session removed...
+   ✓ get_session_fs() after cleanup: None
+   ✓ Sessions list after cleanup: []
+
+6. Testing double cleanup (idempotent)...
+   ✓ Second cleanup returned: False (expected False)
+
+7. Testing expiration tracking...
+   ✓ New session: 86fde7f0...
+   ✓ is_session_expired(timeout=3600): False
+   ✓ get_session_metadata: SessionMetadata retrieved
+   ✓ Cleaned up test session
+
+============================================================
+QA SCENARIO PASSED
+============================================================
+
+Test Execution Summary:
+=======================
+
+All 41 tests executed successfully:
+- 39 tests passed
+- 2 tests expected to fail (xfail) - MemoryFileSystem shared storage limitation
+
+New implementation covers all requirements:
+✓ Close all open file handles for the session
+✓ Clear MemoryFileSystem contents
+✓ Remove session from _sessions dict
+✓ Clean up all tracking data
+✓ Handle edge cases (non-existent, double cleanup)
+✓ Session expiration tracking (last_accessed, is_session_expired)
+✓ Tests verify all functionality
+
+Commit Ready: feat(fs): implement session cleanup and resource management
+
+Final Test Results:
+===================
+
+All 46 tests PASSED:
+- 46 passed
+- 0 failed
+- 0 xfailed
+
+Implementation Summary:
+=======================
+
+Files Modified:
+1. /Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad/src/mcp_scratchpad/fs/session_manager.py
+2. /Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad/tests/unit/fs/test_session_manager.py
+
+Key Features Implemented:
+
+1. Session Cleanup (cleanup_session()):
+   - Returns True if session was cleaned, False if not found
+   - Clears MemoryFileSystem store (fs.store.clear())
+   - Closes open file handles in fs._cache
+   - Removes session from all tracking dictionaries
+   - Idempotent - safe to call multiple times
+
+2. Session Metadata Tracking:
+   - SessionMetadata dataclass with session_id, created_at, last_accessed, metadata
+   - create_session() accepts optional metadata dict and TTL
+   - get_session() returns metadata with expiration check
+   - get_session_metadata() returns raw metadata
+
+3. Expiration Tracking:
+   - last_accessed timestamp updated on each access
+   - is_session_expired(session_id, timeout_seconds) checks inactivity
+   - get_expired_sessions(timeout_seconds) returns expired session IDs
+   - cleanup_expired_sessions() removes expired sessions
+   - update_session_access() manually updates timestamp
+
+4. TTL Support:
+   - create_session(ttl=timedelta) sets session expiration
+   - get_session() returns None for expired sessions
+   - list_sessions() excludes expired by default, includes with flag
+   - default_session_ttl parameter in constructor
+
+5. Resource Management:
+   - Proper cleanup of MemoryFileSystem store
+   - File handle cleanup
+   - Complete removal from tracking dicts
+
+All requirements met and verified with comprehensive tests.
+
+Task 9 Complete - Ready for commit

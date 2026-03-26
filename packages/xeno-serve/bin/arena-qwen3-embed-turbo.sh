@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+./bin/arena-serve.sh /mnt/modelscope/models/Qwen/Qwen3-Embedding-4B \
+    -n qwen3-embed-turbo-serv \
+    -c 8 -m 32 -g 1 \
+    --config ./config/qwen3.yaml \
+    --env OMP_NUM_THREADS=6 \
+    --data pvc-yilab-oss-cache:/mnt/ \
+    -- --served-model-name qwen3-embed-turbo

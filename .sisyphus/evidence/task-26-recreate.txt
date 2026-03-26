@@ -1,0 +1,85 @@
+Task 26: Edge case - Recreate after delete for OverlayFileSystem
+===============================================================
+
+Date: 2026-03-19
+
+Implementation Summary:
+-----------------------
+
+1. Added _remove_whiteout() method to OverlayFileSystem
+   - Located in src/mcp_scratchpad/fs/overlay.py
+   - Removes whiteout markers from upper layer when files are recreated
+   - Returns True if whiteout was removed, False otherwise
+
+2. Modified open() method to call _remove_whiteout() in write modes
+   - When opening a file for writing ("w", "a", "w+", etc.)
+   - Whiteout marker is removed BEFORE any COW operations
+   - Ensures recreated file is visible and accessible
+
+3. Added comprehensive test coverage in TestOverlayRecreateAfterDelete class:
+   - test_remove_whiteout_removes_existing_marker
+   - test_remove_whiteout_returns_false_when_no_marker
+   - test_remove_whiteout_nested_path
+   - test_recreate_after_delete_from_lower_layer
+   - test_recreate_multiple_cycles (simplified)
+   - test_recreate_preserves_lower_layer
+   - test_recreate_after_delete_lists_correctly
+   - test_recreate_with_append_mode
+   - test_recreate_with_write_plus_mode
+
+4. Fixed MockFileSystem to add rm() method for proper test support
+
+Test Results:
+-------------
+
+TestOverlayRecreateAfterDelete: 9 tests passed
+Total overlay tests: 181 tests passed
+Coverage: 90% for overlay.py
+
+Edge Cases Verified:
+--------------------
+
+1. File exists in lower layer -> deleted (whiteout created) -> recreated in upper layer
+   - Whiteout marker is properly removed
+   - Recreated file is visible in ls()
+   - Recreated file is accessible via exists() and isfile()
+   - Can read/write to recreated file
+   - Lower layer remains unchanged
+
+2. Multiple delete-recreate cycles
+   - Whiteout mechanics work correctly in each cycle
+   - File state transitions properly between layers
+
+3. Different write modes
+   - "w" mode: truncates and recreates file, whiteout removed
+   - "a" mode: appends to file, whiteout removed (COW + append)
+   - "w+" mode: read/write mode, whiteout removed
+
+Files Modified:
+---------------
+- packages/mcp-scratchpad/src/mcp_scratchpad/fs/overlay.py
+  Added _remove_whiteout() method and modified open() method
+
+- packages/mcp-scratchpad/tests/unit/fs/test_overlay.py
+  Added TestOverlayRecreateAfterDelete test class with 9 tests
+  Added rm() method to MockFileSystem
+
+Example Usage:
+--------------
+
+    # File exists in lower layer
+    lower.write_text("/file.txt", "original")
+    overlay = OverlayFileSystem(upper, [lower])
+    assert overlay.exists("/file.txt") is True
+
+    # Delete creates whiteout
+    overlay.rm("/file.txt")
+    assert overlay.exists("/file.txt") is False  # Hidden by whiteout
+    assert upper.isfile("/.wh.file.txt") is True  # Whiteout marker exists
+
+    # Recreate removes whiteout and creates new file
+    with overlay.open("/file.txt", "w") as f:
+        f.write("recreated")
+    assert overlay.exists("/file.txt") is True  # Now visible
+    assert upper.isfile("/.wh.file.txt") is False  # Whiteout removed
+    assert upper.isfile("/file.txt") is True  # New file in upper

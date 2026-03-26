@@ -1,0 +1,98 @@
+Task 34: FastMCP Resource Handler Registration
+===============================================
+Date: 2026-03-19
+Status: COMPLETED
+
+SUMMARY
+-------
+Successfully implemented FastMCP resource handler registration for scratchpad:// URI scheme access to session filesystems.
+
+DELIVERABLES
+------------
+1. Created src/mcp_scratchpad/resources/__init__.py
+   - Exports register_scratchpad_resources and ResourceError
+
+2. Created src/mcp_scratchpad/resources/scratchpad_resources.py
+   - ResourceError dataclass for structured error responses
+   - ResourceNotFoundError and SessionNotFoundError exception classes
+   - _guess_mime_type(): MIME type detection with content-based prioritization
+   - _is_binary_content(): Binary content detection
+   - _normalize_path(): Path normalization for filesystem access
+   - _read_file_content(): Reads file content from session filesystem
+   - _list_directory(): Lists directory contents with metadata
+   - register_scratchpad_resources(): Main registration function with @mcp.resource decorator
+   - register_directory_resources(): Optional directory listing handlers
+
+3. Updated src/mcp_scratchpad/server.py
+   - Integrated SessionFileSystemManager initialization
+   - Added register_scratchpad_resources() call in create_server()
+   - Added get_session_manager() utility function
+   - Graceful handling if resource registration fails
+
+4. Created tests/unit/resources/test_scratchpad_resources.py
+   - 37 unit tests covering:
+     * MIME type detection (path-based and content-based)
+     * Binary content detection
+     * Path normalization
+     * Error handling and custom exceptions
+     * File content reading
+     * Directory listing
+     * Resource registration
+     * Integration tests with real filesystem
+     * Server integration tests
+
+TEST RESULTS
+------------
+All 37 tests PASSED:
+  - test_mime_type_detection: 4 tests
+  - test_binary_content_detection: 4 tests
+  - test_path_normalization: 4 tests
+  - test_resource_errors: 5 tests
+  - test_read_file_content: 5 tests
+  - test_list_directory: 5 tests
+  - test_resource_registration: 2 tests
+  - test_resource_handler_integration: 5 tests
+  - test_directory_listing_integration: 2 tests
+  - test_server_integration: 2 tests
+
+RESOURCE URI PATTERN
+--------------------
+- scratchpad://{session_id}/{file_path}
+  - session_id: UUID4 session identifier
+  - file_path: File path within session (supports nested paths)
+
+INTEGRATION POINTS
+------------------
+- SessionFileSystemManager: Provides per-session filesystem instances
+- FastMCP @mcp.resource() decorator: Registers handlers with URI template
+- MemoryFileSystem: Upper layer for session writes
+- Automatic MIME type detection: Returns appropriate content types
+
+ERROR HANDLING
+--------------
+- SessionNotFoundError: Raised when session doesn't exist or expired
+- ResourceNotFoundError: Raised when file doesn't exist
+- IsADirectoryError: Raised when trying to read a directory
+- FileNotFoundError: Converted for MCP protocol compatibility
+
+FILES MODIFIED/CREATED
+----------------------
+  NEW: packages/mcp-scratchpad/src/mcp_scratchpad/resources/__init__.py
+  NEW: packages/mcp-scratchpad/src/mcp_scratchpad/resources/scratchpad_resources.py
+  NEW: packages/mcp-scratchpad/tests/unit/resources/__init__.py
+  NEW: packages/mcp-scratchpad/tests/unit/resources/test_scratchpad_resources.py
+  MOD: packages/mcp-scratchpad/src/mcp_scratchpad/server.py
+
+VERIFICATION COMMANDS
+---------------------
+  cd packages/mcp-scratchpad
+  python -m pytest tests/unit/resources/test_scratchpad_resources.py -v
+
+ACCEPTANCE CRITERIA MET
+-----------------------
+[x] Resource handler module created
+[x] FastMCP resource decorators/hooks configured
+[x] Resource handlers registered on server startup
+[x] Integration with SessionFileSystemManager for file access
+[x] Tests created in tests/unit/resources/test_scratchpad_resources.py
+[x] Evidence file created

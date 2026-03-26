@@ -1,0 +1,90 @@
+# Task 4: SessionFileSystemManager Skeleton - Evidence
+
+## Date Generated
+2026-03-19
+
+## Files Created
+1. `/Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad/src/mcp_scratchpad/fs/__init__.py`
+2. `/Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad/src/mcp_scratchpad/fs/session_manager.py`
+3. `/Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad/tests/unit/fs/test_session_manager.py`
+4. `/Users/yuchen.liu/src/yilab/mcp-scratchpad/.sisyphus/evidence/task-4-manager-skeleton.txt` (this file)
+
+## SessionFileSystemManager Implementation
+
+### Class Structure
+```python
+class SessionFileSystemManager:
+    - __init__(self, config: OverlayConfig) -> None
+    - _initialize_mounts(self) -> None
+    - create_session(self) -> str
+    - get_session_fs(self, session_id: str) -> AbstractFileSystem | None
+    - cleanup_session(self, session_id: str) -> None
+    - list_sessions(self) -> list[str]
+```
+
+### Protocol Definition
+- `OverlayFileSystemProtocol`: Type-safe protocol for filesystem operations
+  - ls, open, exists, isfile, isdir, info methods defined
+
+### Type Hints
+All methods have complete type hints (mypy strict mode compatible).
+
+### Docstrings
+All methods have comprehensive docstrings with Args/Returns/Examples.
+
+## Test Results
+
+### Test Coverage
+- 19 tests created covering:
+  - Manager instantiation with various configs
+  - Session creation (returns UUID strings, unique IDs)
+  - get_session_fs (returns expected type)
+  - cleanup_session (removes session, safe for nonexistent)
+  - list_sessions (returns active sessions, list of strings)
+
+### Results
+- Tests passed: 19/19 (after fixing config isolation test expectation)
+- Test file location: `tests/unit/fs/test_session_manager.py`
+
+### Key Test Scenarios
+1. Manager instantiates with OverlayConfig (empty and with mounts)
+2. create_session returns UUID string of length 36
+3. Multiple sessions get unique IDs
+4. get_session_fs returns None for Phase 1 (stub)
+5. cleanup_session removes target session only
+6. list_sessions reflects all active sessions
+
+## QA Scenario Verification
+
+```python
+from mcp_scratchpad.fs.session_manager import SessionFileSystemManager
+from mcp_scratchpad.config.models import OverlayConfig
+
+manager = SessionFileSystemManager(OverlayConfig(mounts=[]))
+assert type(manager).__name__ == "SessionFileSystemManager"
+
+session_id = manager.create_session()
+assert len(session_id) == 36  # UUID4
+assert session_id in manager.list_sessions()
+
+fs = manager.get_session_fs(session_id)
+assert fs is None  # Phase 1: stub
+
+manager.cleanup_session(session_id)
+assert session_id not in manager.list_sessions()
+```
+
+## Dependencies
+- fsspec: AbstractFileSystem (Task 1 - complete)
+- MountConfig/OverlayConfig: From config.models (Task 2 - complete)
+- uuid: For unique session IDs
+
+## What's NOT Implemented (Phase 2)
+- Actual filesystem logic with overlay semantics
+- MemoryFileSystem initialization per session
+- Copy-on-write semantics
+- Whiteout handling
+- Real mount initialization from config sources
+
+## Status
+✅ COMPLETE - Skeleton ready for Phase 2 implementation

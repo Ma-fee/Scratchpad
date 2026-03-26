@@ -1,0 +1,8 @@
+ARG ACS_PPU_VERSION="25.05-v1.5.1-vllm0.8.5-torch2.6-cu126-20250604"
+FROM egslingjun-registry.cn-wulanchabu.cr.aliyuncs.com/egslingjun/inference-xpu-pytorch:${ACS_PPU_VERSION}
+
+COPY --from=ghcr.nju.edu.cn/ghcr.io/mostlygeek/llama-swap:cpu /app/llama-swap /app/ /bin/
+
+ENTRYPOINT ["/bin/llama-swap"]
+# 启动 runit
+CMD ["-listen", ":8000", "-config", "/app/config.yaml"]

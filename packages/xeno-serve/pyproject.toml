@@ -1,0 +1,78 @@
+[project]
+name = "xeno-serve"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "torch~=2.6",
+    "torchvision>=0.20",
+    "modelscope>=1.25.0",
+    "setuptools>=80.4.0",
+    "transformers[torch]>=4.51.3",
+    "vllm>=0.8.0",
+    "flashinfer-python<0.2.3",
+    "flash-attn>=2.7.4.post1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+environments = [
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+no-build-isolation-package = ["flash-attn"]
+
+[[tool.uv.dependency-metadata]]
+name = "flash-attn"
+version = "2.6.3"
+requires-dist = ["torch", "einops"]
+
+[tool.uv.sources]
+torch = [
+    { index = "torch-cpu", marker = "platform_system == 'Darwin' and platform_machine == 'arm'" },
+    { index = "torch-cu124", marker = "platform_system == 'Linux'" },
+]
+torchvision = [
+    { index = "torch-cpu", marker = "platform_system == 'Darwin' and platform_machine == 'arm'" },
+    { index = "torch-cu124", marker = "platform_system == 'Linux'" },
+]
+flashinfer-python = [
+    { index = "flashinfer", marker = "platform_system == 'Linux'" },
+]
+flash-attn = [
+    { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiTRUE-cp310-cp310-linux_x86_64.whl" },
+]
+
+[[tool.uv.index]]
+name = "torch-cpu"
+url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cpu"
+explicit = true
+format = "flat"
+
+
+[[tool.uv.index]]
+name = "torch-cu121"
+url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cu121"
+explicit = true
+format = "flat"
+
+[[tool.uv.index]]
+name = "torch-cu124"
+url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cu124"
+explicit = true
+format = "flat"
+
+[[tool.uv.index]]
+name = "flashinfer"
+url = "https://flashinfer.ai/whl/cu124/torch2.6/"
+explicit = true
+
+[[tool.uv.index]]
+name = "vllm-apc"
+url = "https://dsefy9jmd4lqu.cloudfront.net/nightly"
+# url = "https://dsefy9jmd4lqu.cloudfront.net/5eeabc2a4400fde9b030f2f72746a2b03db059bd"
+explicit = true

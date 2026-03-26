@@ -1,0 +1,113 @@
+================================================================================
+TASK 16: File info and metadata merging - info() method
+================================================================================
+
+Date: Thu Mar 19 2026
+Files Modified:
+  - src/mcp_scratchpad/fs/overlay.py
+  - tests/unit/fs/test_overlay.py
+
+================================================================================
+IMPLEMENTATION
+================================================================================
+
+Added info() method to OverlayFileSystem class in overlay.py:
+
+  def info(self, path: str, **kwargs: Any) -> dict[str, Any]:
+      """Get metadata information about a file or directory.
+
+      Resolves the path to its source layer and retrieves metadata,
+      adding a '_layer' field to indicate which layer the file is from.
+
+      Args:
+          path: The path to get info for. Should start with '/'.
+          **kwargs: Additional arguments passed to the underlying filesystem.
+
+      Returns:
+          A dictionary containing file/directory metadata with an additional
+          '_layer' field:
+              - 0: Upper layer (writable)
+              - 1, 2, ...: Lower layers (read-only, in priority order)
+
+      Raises:
+          FileNotFoundError: If the path does not exist in any layer.
+      """
+      resolved = self._resolve(path)
+      if resolved is None:
+          raise FileNotFoundError(f"Path not found: {path}")
+
+      fs, rel_path, layer_index = resolved
+      info = fs.info(rel_path, **kwargs)
+      info["_layer"] = layer_index
+      return info
+
+================================================================================
+TEST RESULTS
+================================================================================
+
+TestOverlayFileSystemInfo: 9 tests PASSED
+--------------------------------------------
+test_info_returns_dict ................................. PASSED
+  - info() returns a dictionary
+
+test_info_has_layer_field .............................. PASSED
+  - info() result includes _layer field
+
+test_info_layer_upper_file ............................. PASSED
+  - _layer field is 0 for upper layer files
+
+test_info_layer_from_upper_directory ................... PASSED
+  - _layer field is 0 for upper layer directories
+
+test_info_layer_value_is_int ........................... PASSED
+  - _layer field is an integer type
+
+test_info_nonexistent_path_raises_error ................ PASSED
+  - info() raises FileNotFoundError for non-existent paths
+
+test_info_has_standard_fields .......................... PASSED
+  - info() includes standard fsspec fields: name, size, type
+
+test_info_preserves_underlying_metadata ................ PASSED
+  - info() preserves all metadata from underlying filesystem
+
+test_info_upper_takes_precedence ....................... PASSED
+  - info() returns upper layer info when file exists in both
+
+================================================================================
+QA SCENARIO VERIFICATION
+================================================================================
+
+Scenario: File info with layer indicator
+  Steps:
+    1. upper = MemoryFileSystem()
+    2. upper.pipe("/test.txt", b"content")
+    3. lower = MemoryFileSystem()
+    4. overlay = OverlayFileSystem(upper, [lower])
+    5. info = overlay.info("/test.txt")
+    6. print(info.get("_layer"))
+  
+  Expected: 0 (upper layer)
+  Actual: 0
+  Result: PASS
+
+================================================================================
+IMPLEMENTATION NOTES
+================================================================================
+
+1. The info() method uses _resolve() to find the source layer
+2. Calls info() on the source filesystem
+3. Adds _layer field to metadata (0 for upper, 1,2,... for lower layers)
+4. Returns the augmented metadata dict
+5. Handles FileNotFoundError for non-existent paths
+
+MemoryFileSystem Limitations:
+- MemoryFileSystem uses shared class-level storage
+- Files created in one instance are visible in all instances
+- This makes layer-specific testing challenging with MemoryFileSystem
+- The tests verify that _layer is correctly added (0 for upper layer)
+- Full layer-specific validation requires filesystems with isolated storage
+
+================================================================================
+END OF EVIDENCE
+================================================================================

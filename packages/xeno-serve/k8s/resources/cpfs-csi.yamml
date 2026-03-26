@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: cpfs-01-default-pv
+  labels:
+    alicloud-pvname: cpfs-01-default-pv
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 20Gi
+  csi:
+    driver: nasplugin.csi.alibabacloud.com
+    volumeAttributes:
+      mountProtocol: cpfs-nfs             # 挂载时，使用NFS协议进行挂载。
+      path: "/share/home"                      # 挂载目录必须以/share为前缀。
+      volumeAs: subpath
+      server: "cpfs-01ae54a093feadb4-01905f881b13ea15n.cn-shanghai.cpfs.aliyuncs.com"      # 为挂载点前面的域名。
+    volumeHandle: cpfs-01-default-pv # 必须与PV Name保持一致。
+  mountOptions:
+  - rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport
+  - vers=3
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cpfs-01-default-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  selector:
+    matchLabels:
+      alicloud-pvname: cpfs-01-default-pv

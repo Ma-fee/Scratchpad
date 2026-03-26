@@ -1,0 +1,61 @@
+# Install uv
+FROM python:3.12-slim AS builder
+
+# Define build arguments with default values
+ARG UV_INDEX_URL=https://mirrors.ustc.edu.cn/pypi/
+ARG PYTHON_VERSION=3.12
+
+# Set environment variables from build arguments
+ENV UV_INDEX_URL=${UV_INDEX_URL}
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Change the working directory to the app directory
+WORKDIR /app
+# ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
+ENV UV_PRERELEASE="allow"
+
+# Copy mcp-scratchpad project files
+COPY packages/mcp-scratchpad/pyproject.toml packages/mcp-scratchpad/uv.lock ./
+
+# Install dependencies
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-editable
+
+# Copy the project source code
+COPY packages/mcp-scratchpad/src ./src
+COPY packages/mcp-scratchpad/README.md ./
+
+# Sync the project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-editable
+
+FROM python:3.12-slim
+
+# Set timezone environment variable
+ENV TZ=Asia/Shanghai
+
+# Create app user
+RUN useradd --create-home --shell /bin/bash app
+
+# Copy the environment, but not the source code
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+
+# Change to app directory
+WORKDIR /app
+
+# Create output directory for file storage
+RUN mkdir -p /app/out/files && chown app:app /app/out/files
+
+# Switch to app user
+USER app
+
+# Expose SSE port
+EXPOSE 8000
+
+# Set entrypoint
+ENTRYPOINT ["/app/.venv/bin/mcp-scratchpad"]
+
+# Default command - run in SSE mode
+CMD ["--transport", "sse", "--host", "0.0.0.0", "--port", "8000"]

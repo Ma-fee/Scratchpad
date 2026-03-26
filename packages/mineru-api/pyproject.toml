@@ -1,0 +1,43 @@
+[project]
+name = "mineru-api"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.12",
+    "magic-pdf[full]>=1.3.12",
+    "python-multipart>=0.0.20",
+    "torch>=2.4.0",
+    "torchvision>=0.20",
+    "uvicorn>=0.34.2",
+]
+
+[tool.uv.sources]
+torch = [
+  { index = "torch-cpu", marker = "platform_system == 'Darwin' and platform_machine == 'arm'"},
+  { index = "torch-cu124", marker = "platform_system == 'Linux'"},
+]
+torchvision = [
+  { index = "torch-cpu", marker = "platform_system == 'Darwin' and platform_machine == 'arm'"},
+  { index = "torch-cu124", marker = "platform_system == 'Linux'"},
+]
+
+[[tool.uv.index]]
+name = "torch-cpu"
+url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cpu"
+explicit = true
+format = "flat"
+
+
+[[tool.uv.index]]
+name = "torch-cu121"
+url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cu121"
+explicit = true
+format = "flat"
+
+[[tool.uv.index]]
+name = "torch-cu124"
+url = "http://mirrors.cloud.aliyuncs.com/pytorch-wheels/cu124"
+explicit = true
+format = "flat"

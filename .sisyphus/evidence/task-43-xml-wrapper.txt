@@ -1,0 +1,124 @@
+Task 43: XML Wrapper Format for MCP Resources
+=============================================
+
+Implementation Date: 2026-03-19
+Status: COMPLETE
+
+Files Created:
+--------------
+1. src/mcp_scratchpad/resources/xml_wrapper.py (683 lines)
+   - XMLResourceWrapper class for converting resources to XML
+   - to_xml() method for ResourceReadResult and DirectoryListingResult
+   - read_resource_as_xml() convenience function
+   - read_directory_as_xml() for directory listings
+   - parse_resource_xml() for parsing XML back to dict
+   - validate_resource_xml() for XML validation
+
+2. tests/unit/resources/test_xml_wrapper.py (848 lines)
+   - 37 comprehensive test cases
+   - Tests for XMLResourceWrapper initialization
+   - Tests for text/binary/image/directory resource conversion
+   - Tests for error handling
+   - Tests for XML parsing and validation
+   - Tests for helper utilities
+
+Files Modified:
+---------------
+3. src/mcp_scratchpad/resources/__init__.py
+   - Added exports for XML wrapper components:
+     - XMLResourceWrapper
+     - XMLResourceError
+     - read_resource_as_xml
+     - read_directory_as_xml
+     - parse_resource_xml
+     - validate_resource_xml
+
+XML Schema:
+-----------
+The XML wrapper generates standardized XML format:
+
+<?xml version="1.0" encoding="UTF-8"?>
+<resource type="text|image|binary|directory">
+  <uri>scratchpad://...</uri>
+  <session_id>...</session_id>
+  <path>...</path>
+  <metadata>
+    <size>...</size>
+    <mimetype>...</mimetype>
+    <modified>...</modified>
+    <created>...</created>
+    <content_type>...</content_type>
+    <extension>...</extension>
+    <is_directory>false</is_directory>
+  </metadata>
+  <content encoding="base64|plain">
+    <is_binary>false</is_binary>
+    <size_bytes>...</size_bytes>
+    <data>...</data>
+  </content>
+  <success>true</success>
+  <error>...</error>  <!-- if error -->
+  <subscription_info>
+    <is_subscribed>false</is_subscribed>
+    ...
+  </subscription_info>
+  <capabilities>
+    <capability>read</capability>
+    <capability>read_chunk</capability>
+    ...
+  </capabilities>
+</resource>
+
+Test Results:
+-------------
+$ uv run pytest tests/unit/resources/test_xml_wrapper.py
+============================= test session starts ==============================
+platform darwin -- Python 3.14.2, pytest-9.0.1
+...
+37 passed, 1 warning in 0.24s
+
+Test Coverage Summary:
+- XMLResourceWrapper initialization: 3 tests
+- Resource to XML conversion: 9 tests
+- Directory to XML conversion: 5 tests
+- Dictionary to XML conversion: 4 tests
+- XML parsing: 6 tests
+- XML validation: 4 tests
+- Helper functions: 3 tests
+- Error handling: 3 tests
+
+Features Implemented:
+---------------------
+1. XMLResourceWrapper class
+   - Configurable pretty-printing
+   - Optional XML declaration
+   - Optional namespace support
+   - Proper character escaping
+
+2. Resource type detection
+   - text: Non-binary files with text content
+   - binary: Binary files (non-image)
+   - image: Binary files with image MIME type
+   - directory: Directory listings
+
+3. Content encoding
+   - Base64 encoding for binary content
+   - UTF-8 plain text for text content
+   - Proper handling of special characters
+
+4. Error handling
+   - XMLResourceError exception class
+   - Graceful handling of parse errors
+   - Validation of required elements
+
+5. Helper functions
+   - read_resource_as_xml(): Read resource and return as XML
+   - read_directory_as_xml(): Read directory as XML
+   - parse_resource_xml(): Parse XML back to dict
+   - validate_resource_xml(): Validate XML structure
+
+Backward Compatibility:
+-----------------------
+- All existing JSON/text resource responses remain unchanged
+- XML is optional via new utility functions
+- No breaking changes to existing APIs

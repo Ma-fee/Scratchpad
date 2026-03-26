@@ -1,0 +1,14 @@
+[project]
+name = "xeno-ner"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "yuchen.liu", email = "yuchen.liu@irootech.com" }
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

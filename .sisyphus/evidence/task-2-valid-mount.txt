@@ -1,0 +1,32 @@
+# Task 2 Evidence: Valid Mount Configuration
+
+## Test Case: Valid mount configuration
+
+### Command
+```bash
+cd /Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad
+python -c "
+from mcp_scratchpad.config.models import MountConfig
+m = MountConfig(name='templates', source='file:///tmp/templates', mount_point='/templates', mode='ro')
+print(m.name)
+"
+```
+
+### Expected Result
+Output contains "templates"
+
+### Status: PASS
+
+MountConfig successfully created with:
+- name: 'templates'
+- source: 'file:///tmp/templates'
+- mount_point: '/templates'
+- mode: 'ro'
+- priority: 0 (default)
+- options: {} (default)
+
+Model fields validated correctly:
+- Name must start with letter: PASS
+- Source URI scheme validation: PASS
+- Mount point must be absolute path: PASS
+- Mode must be 'ro' or 'rw': PASS

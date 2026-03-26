@@ -1,0 +1,143 @@
+Task 40: Client Capability Detection for MCP Resources - Implementation Evidence
+================================================================================
+
+COMPLETION DATE: 2026-03-19
+STATUS: COMPLETE
+
+1. IMPLEMENTATION SUMMARY
+-------------------------
+Successfully implemented client capability detection for MCP resources including:
+- ClientCapability enum with 5 capability flags
+- detect_client_capabilities() function for parsing headers/user-agent
+- negotiate_format() function for format negotiation
+- Capability-aware resource responses
+- Comprehensive test suite with 57 test cases
+
+2. FILES CREATED/MODIFIED
+-------------------------
+
+2.1 NEW FILE: src/mcp_scratchpad/resources/capabilities.py (496 lines)
+   - ClientCapability enum (IMAGES, BINARY, SUBSCRIPTIONS, THUMBNAILS, XML_FORMAT)
+   - CLIENT_PROFILES dictionary with known client profiles
+   - detect_client_capabilities(headers, user_agent) function
+   - negotiate_format(preferred, client_caps) function
+   - CapabilityMetadata dataclass for response metadata
+   - Helper functions: is_binary_mime_type(), get_capability_info_for_resource()
+
+2.2 MODIFIED: src/mcp_scratchpad/resources/read_handler.py
+   - Added client_caps parameter to read_resource() function
+   - Added capability_metadata field to ResourceReadResult dataclass
+   - Updated to_dict() to include capability_metadata when present
+   - Results now include capability info when client_caps provided
+
+2.3 MODIFIED: src/mcp_scratchpad/resources/__init__.py
+   - Exported all new capability types and functions
+   - Imports: ClientCapability, CapabilityMetadata, CLIENT_PROFILES
+   - Functions: detect_client_capabilities, negotiate_format, is_binary_mime_type, get_capability_info_for_resource
+
+2.4 NEW FILE: tests/unit/resources/test_capabilities.py (602 lines, 57 test cases)
+   - TestClientCapabilityEnum: Enum value tests
+   - TestDetectClientCapabilities: 12+ tests for detection from user agent/headers
+   - TestNegotiateFormat: 10+ tests for format negotiation
+   - TestCapabilityMetadata: 8 tests for metadata handling
+   - TestIsBinaryMimeType: 8 tests for binary detection
+   - TestGetCapabilityInfoForResource: 7 tests for resource capability info
+   - TestClientProfiles: 3 tests for predefined profiles
+   - TestConstants: 3 tests for module constants
+   - TestIntegrationWithReadResource: 3 integration tests
+
+3. TEST RESULTS
+---------------
+All 57 tests passed successfully:
+- 100% pass rate
+- No failures, no errors
+- Coverage: capabilities.py at 92%
+
+4. FEATURES IMPLEMENTED
+-----------------------
+
+4.1 ClientCapability Enum
+   - IMAGES: Supports image resources (PNG, JPEG, etc.)
+   - BINARY: Supports binary resource data
+   - SUBSCRIPTIONS: Supports resource subscriptions/notifications
+   - THUMBNAILS: Supports thumbnail generation
+   - XML_FORMAT: Supports XML wrapper format
+
+4.2 Detection Sources
+   - User-Agent header (Claude Desktop, MCP Inspector, etc.)
+   - Accept header (MIME type hints)
+   - X-MCP-Capabilities header (explicit capability declaration)
+   - Case-insensitive header parsing
+
+4.3 Known Client Profiles
+   - claude-desktop: Images, Binary, XML, Thumbnails
+   - claude-web: Images, XML
+   - mcp-inspector: All capabilities
+   - mcp-client: Images, Binary, XML
+
+4.4 Format Negotiation
+   - negotiate_format() falls back gracefully
+   - Custom fallback chains supported
+   - Text format is always supported (backward compatible)
+
+4.5 Resource Response Enhancement
+   - Includes supported_formats list
+   - Includes capability_version
+   - Includes format recommendations
+   - Optional subscription_supported flag
+   - Optional thumbnail_available flag for images
+
+5. USAGE EXAMPLES
+-----------------
+
+5.1 Detect capabilities from request:
+   ```python
+   from mcp_scratchpad.resources.capabilities import detect_client_capabilities
+   
+   caps = detect_client_capabilities(
+       headers={"Accept": "image/png, text/plain"},
+       user_agent="Claude-Desktop/1.0"
+   )
+   # Returns: {ClientCapability.IMAGES, ClientCapability.BINARY, ...}
+   ```
+
+5.2 Negotiate format:
+   ```python
+   from mcp_scratchpad.resources.capabilities import negotiate_format
+   
+   format = negotiate_format("image", caps)
+   # Returns: "image" if supported, else "text"
+   ```
+
+5.3 Read resource with capabilities:
+   ```python
+   from mcp_scratchpad.resources import read_resource, ClientCapability
+   
+   caps = {ClientCapability.IMAGES, ClientCapability.BINARY}
+   result = read_resource(uri, client_caps=caps)
+   
+   # result.capability_metadata contains:
+   # - supported_formats: ["text", "image", "binary"]
+   # - capability_version: "1.0"
+   # - recommendations: {...}
+   ```
+
+6. BACKWARD COMPATIBILITY
+-------------------------
+- Client capabilities are optional (client_caps parameter defaults to None)
+- Existing resource responses unchanged when capabilities not provided
+- Text format always supported as fallback
+- All existing tests continue to pass
+
+7. REQUIREMENTS VERIFICATION
+----------------------------
+✅ ClientCapability enum with IMAGES, BINARY, SUBSCRIPTIONS, THUMBNAILS, XML_FORMAT
+✅ detect_client_capabilities() function implemented
+✅ negotiate_format() function implemented
+✅ Capability-aware resource responses implemented
+✅ Tests in tests/unit/resources/test_capabilities.py (57 test cases > 12 required)
+✅ All tests passing
+✅ Evidence file created (this document)
+✅ No breaking changes to existing resource responses
+✅ Client capabilities are optional
+✅ URI format unchanged

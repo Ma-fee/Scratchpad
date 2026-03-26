@@ -1,0 +1,75 @@
+Task 21: Local filesystem backend - Evidence
+==========================================
+
+Scenario: Local filesystem with path prefix
+-------------------------------------------
+
+Steps:
+  1. Create temp directory /tmp/test/base
+  2. fs = create_local_filesystem(path_prefix="/tmp/test/base")
+  3. fs.write_text("/file.txt", "content")
+  4. assert Path("/tmp/test/base/file.txt").exists()
+
+Result: PASSED
+Expected: File created under prefix
+
+
+Implementation Summary
+----------------------
+
+Files Created:
+1. src/mcp_scratchpad/fs/backends.py
+   - create_local_filesystem(path_prefix: str | None = None, **options) -> AbstractFileSystem
+   - Imports LocalFileSystem from fsspec.implementations.local
+   - Imports DirFileSystem from fsspec.implementations.dirfs
+   - Returns LocalFileSystem directly if no prefix
+   - Returns DirFileSystem wrapping LocalFileSystem if prefix provided
+   - Passes options to LocalFileSystem constructor
+
+2. tests/unit/fs/test_backends.py
+   - TestCreateLocalFilesystem: Tests instantiation with/without prefix
+   - TestLocalFilesystemOperations: File ops without prefix
+   - TestDirFilesystemOperations: File ops with prefix (isolation testing)
+   - TestFilesystemInfo: Metadata testing
+   - TestFileRemoval: Delete operations
+
+Test Results
+------------
+All 17 tests passed:
+- test_create_without_prefix_returns_local_filesystem ✓
+- test_create_with_prefix_returns_dir_filesystem ✓
+- test_create_passes_options_to_local_filesystem ✓
+- test_create_with_prefix_and_options ✓
+- test_write_and_read_text_without_prefix ✓
+- test_write_and_read_binary_without_prefix ✓
+- test_directory_operations_without_prefix ✓
+- test_write_and_read_text_with_prefix ✓
+- test_nested_paths_with_prefix ✓
+- test_prefix_isolates_access ✓
+- test_list_directory_with_prefix ✓
+- test_exists_with_prefix ✓
+- test_isfile_and_isdir_with_prefix ✓
+- test_info_without_prefix ✓
+- test_info_with_prefix ✓
+- test_rm_without_prefix ✓
+- test_rm_with_prefix ✓
+
+Key Capabilities Verified
+-------------------------
+1. LocalFileSystem creation without prefix (full system access)
+2. DirFileSystem wrapping with prefix (chroot-like isolation)
+3. Text/binary file read/write operations
+4. Directory creation and listing
+5. Path existence checking
+6. File/directory type checking
+7. File metadata info retrieval
+8. File removal
+9. Nested directory structures
+10. Path prefix isolation (cannot escape prefix)
+
+Notes
+-----
+- DirFileSystem provides chroot-like semantics where the prefix becomes the root
+- Access to paths outside the prefix is blocked by the DirFileSystem wrapper
+- Options are passed through to LocalFileSystem constructor
+- All operations work correctly through both direct and prefixed filesystems

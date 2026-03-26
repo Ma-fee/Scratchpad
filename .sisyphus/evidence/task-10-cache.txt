@@ -1,0 +1,79 @@
+# Task 10: Directory Index Cache with TTL - Evidence
+
+## Files Created
+- src/mcp_scratchpad/fs/cache.py (70 lines, 99% coverage)
+- tests/unit/fs/test_cache.py (39 tests)
+
+## Implementation Summary
+
+### CacheEntry Dataclass
+- path: str - directory path
+- entries: list[str] - list of file/directory names
+- created_at: float - Unix timestamp
+- ttl: int - time-to-live in seconds
+
+### CacheConfig Dataclass
+- default_ttl: int = 60 (seconds)
+- max_size: int = 1000 (max entries)
+- enabled: bool = True
+
+### DirectoryIndexCache Class
+- __init__(default_ttl=60, max_size=1000, config=None)
+- get(path) -> list[str] | None: returns entries if not expired
+- set(path, entries, ttl=None): stores with timestamp, validates TTL
+- delete(path) -> bool: removes entry, returns True if existed
+- clear(): removes all entries
+- _is_expired(entry) -> bool: checks if TTL exceeded
+- _evict_oldest(): removes oldest entry when full
+- has_entry(path) -> bool: checks if entry exists (not checking expiration)
+- get_stats() -> dict: returns cache statistics
+
+## QA Scenario Results
+
+### Cache with TTL
+```python
+cache = DirectoryIndexCache()
+
+# Step 1
+cache.set("/test", ["file1"], ttl=1)
+
+# Step 2
+assert cache.get("/test") == ["file1"]  ✅ PASS
+
+# Step 3
+time.sleep(2)
+
+# Step 4
+assert cache.get("/test") is None  ✅ PASS
+```
+
+## Test Results
+```
+============================= test session starts ==============================
+collected 39 items
+tests/unit/fs/test_cache.py .......................................      [100%]
+
+============================== 39 passed in 8.85s ==============================
+```
+
+## Test Coverage by Class
+- TestCacheEntry: 3 tests
+- TestCacheConfig: 4 tests
+- TestDirectoryIndexCacheInstantiation: 4 tests
+- TestCacheSetAndGet: 8 tests
+- TestCacheExpiration: 6 tests
+- TestCacheMaxSize: 5 tests
+- TestCacheDelete: 2 tests
+- TestCacheClear: 2 tests
+- TestCacheHasEntry: 3 tests
+- TestCacheStats: 3 tests
+- TestCacheErrorHandling: 2 tests
+- TestCacheQAScenario: 1 test
+
+## Design Decisions
+- TTL validation happens at entry creation and in set()
+- Expired entries are lazily deleted on access
+- Entries list is copied on set() to prevent external modification
+- Oldest entry evicted when max_size reached (FIFO eviction)
+- Disabled cache returns None for all get() calls
+- Config takes precedence over individual init parameters

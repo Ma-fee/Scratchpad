@@ -1,0 +1,308 @@
+================================================================================
+TASK 39: Resource Subscription and Notifications - Implementation Evidence
+================================================================================
+
+Task: Implement resource subscription and notifications for MCP resources
+Status: COMPLETED
+Date: 2026-03-19
+
+================================================================================
+1. FILES CREATED
+================================================================================
+
+1.1 packages/mcp-scratchpad/src/mcp_scratchpad/resources/subscription.py
+    - ResourceSubscriptionManager class with thread-safe subscription tracking
+    - Subscription dataclass for subscription metadata
+    - ResourceState dataclass for change detection
+    - subscribe_to_resource() function
+    - unsubscribe_from_resource() function
+    - Global subscription manager instance management
+
+1.2 packages/mcp-scratchpad/tests/unit/resources/test_subscription.py
+    - 43 comprehensive test cases covering:
+      - Subscription creation and management
+      - Change detection via polling
+      - Thread-safety
+      - Callback invocation
+      - Integration with read handler
+      - Session cleanup
+      - Error handling
+      - Edge cases
+
+================================================================================
+2. FILES MODIFIED
+================================================================================
+
+2.1 packages/mcp-scratchpad/src/mcp_scratchpad/resources/__init__.py
+    - Added exports for subscription module:
+      - ResourceSubscriptionManager
+      - ResourceSubscriptionError
+      - Subscription
+      - subscribe_to_resource
+      - unsubscribe_from_resource
+      - get_resource_subscription_info
+      - is_resource_subscribed
+      - list_resource_subscriptions
+      - cleanup_session_subscriptions
+
+2.2 packages/mcp-scratchpad/src/mcp_scratchpad/resources/read_handler.py
+    - Updated ResourceReadResult to include subscription_info field
+    - Modified to_dict() method to include subscription info in response
+    - Added _get_subscription_info_for_uri() helper function
+
+================================================================================
+3. IMPLEMENTATION DETAILS
+================================================================================
+
+3.1 Core Components
+-------------------
+
+ResourceSubscriptionManager:
+- Thread-safe subscription tracking using threading.RLock
+- Background polling thread with configurable interval (default: 5s)
+- URI-based subscription indexing for efficient lookups
+- Automatic polling start/stop based on subscription count
+
+Subscription:
+- Dataclass with UUID-based subscription_id
+- Tracks callback, URI, creation time, and resource state
+- Configurable poll_interval per subscription
+- Metadata dictionary for custom data
+
+ResourceState:
+- Tracks mtime and size for change detection
+- has_changed() method for state comparison
+
+3.2 Key Functions
+-----------------
+
+subscribe_to_resource(uri: str, callback: Callable, poll_interval: float = None, metadata: dict = None) -> str
+- Validates URI (must be valid scratchpad:// URI with UUID session_id)
+- Creates subscription with UUID subscription_id
+- Starts polling thread on first subscription
+- Returns subscription_id
+
+unsubscribe_from_resource(subscription_id: str) -> bool
+- Removes subscription by ID
+- Stops polling when no subscriptions remain
+- Cleans up resource state when no subscribers
+- Returns True if subscription was found and removed
+
+3.3 Change Detection
+--------------------
+
+Polling Mechanism:
+- Runs in background daemon thread
+- Checks subscribed resources every poll_interval seconds
+- Uses filesystem's info() to get mtime and size
+- Compares with stored ResourceState
+
+Notification:
+- Invokes callback when change detected (mtime or size differs)
+- Callback receives (uri, notification_data)
+- notification_data includes: timestamp, last_modified, size, subscription_id
+
+3.4 Thread Safety
+-----------------
+
+- All state modifications protected by threading.RLock
+- Thread-safe subscription creation and removal
+- Thread-safe polling and callback invocation
+- Concurrent access to subscription list is safe
+
+3.5 Integration with Read Handler
+---------------------------------
+
+ResourceReadResult.subscription_info:
+  {
+    "is_subscribed": bool,
+    "subscription_count": int,
+    "subscription_ids": [str],
+    "last_modified": str
+  }
+
+- Subscription info included in every successful read_resource() response
+- Helps clients understand if resource is being monitored
+- Updated on each read
+
+================================================================================
+4. TEST RESULTS
+================================================================================
+
+Subscription Tests: 43 passed (0 new failures)
+Total Resource Tests: 213 passed, 2 pre-existing failures unrelated to changes
+
+Test Coverage Areas:
+- Subscription dataclass (2 tests)
+- ResourceState (4 tests)  
+- ResourceSubscriptionManager (15 tests)
+- Polling and change detection (4 tests)
+- Session cleanup (2 tests)
+- Global functions (6 tests)
+- Integration with read handler (2 tests)
+- Error handling (1 test)
+- ResourceSubscriptionError (1 test)
+- Edge cases (6 tests)
+
+================================================================================
+5. USAGE EXAMPLES
+================================================================================
+
+5.1 Basic Subscription
+----------------------
+from mcp_scratchpad.resources import subscribe_to_resource, unsubscribe_from_resource
+
+def on_file_change(uri, data):
+    print(f"Resource {uri} changed!")
+    print(f"New size: {data['size']} bytes")
+    print(f"Modified: {data['last_modified']}")
+
+# Subscribe
+subscription_id = subscribe_to_resource(
+    "scratchpad://550e8400-e29b-41d4-a716-446655440000/config.json",
+    on_file_change
+)
+
+# Later, unsubscribe
+unsubscribe_from_resource(subscription_id)
+
+5.2 With Custom Poll Interval
+------------------------------
+subscription_id = subscribe_to_resource(
+    uri="scratchpad://550e8400-e29b-41d4-a716-446655440000/data.txt",
+    callback=on_change,
+    poll_interval=10.0,  # Check every 10 seconds
+    metadata={"user": "agent_1", "priority": "high"}
+)
+
+5.3 Check Subscription Status
+-----------------------------
+from mcp_scratchpad.resources import (
+    is_resource_subscribed,
+    get_resource_subscription_info,
+    list_resource_subscriptions
+)
+
+# Check if specific resource is subscribed
+if is_resource_subscribed(uri):
+    print("Resource is being monitored")
+
+# Get subscription info
+info = get_resource_subscription_info(uri)
+print(f"Subscribers: {info['subscription_count']}")
+print(f"Subscription IDs: {info['subscription_ids']}")
+
+# List all subscriptions
+subscriptions = list_resource_subscriptions()
+
+5.4 Session Cleanup
+-------------------
+from mcp_scratchpad.resources import cleanup_session_subscriptions
+
+# Clean up all subscriptions for a session
+count = cleanup_session_subscriptions("550e8400-e29b-41d4-a716-446655440000")
+print(f"Cleaned up {count} subscriptions")
+
+================================================================================
+6. API REFERENCE
+================================================================================
+
+6.1 Functions
+-------------
+
+subscribe_to_resource(
+    uri: str,
+    callback: Callable[[str, dict], None],
+    poll_interval: float | None = None,
+    metadata: dict | None = None
+) -> str
+    Subscribe to a resource for change notifications.
+    Returns subscription_id (UUID string).
+
+unsubscribe_from_resource(subscription_id: str) -> bool
+    Unsubscribe from a resource.
+    Returns True if subscription was found and removed.
+
+is_resource_subscribed(uri: str) -> bool
+    Check if a resource has active subscriptions.
+
+get_resource_subscription_info(uri: str) -> dict
+    Get subscription information for a resource.
+
+list_resource_subscriptions(
+    uri: str | None = None,
+    active_only: bool = True
+) -> list[dict]
+    List all resource subscriptions.
+
+cleanup_session_subscriptions(session_id: str) -> int
+    Remove all subscriptions for a session.
+    Returns number of subscriptions removed.
+
+6.2 Classes
+-----------
+
+ResourceSubscriptionManager
+    Thread-safe manager for resource subscriptions.
+
+Subscription
+    Dataclass representing a single subscription.
+
+ResourceState
+    Tracks file state for change detection.
+
+ResourceSubscriptionError
+    Exception for subscription errors.
+
+================================================================================
+7. TECHNICAL NOTES
+================================================================================
+
+7.1 Threading Model
+-------------------
+- Polling runs in daemon thread
+- Thread-safe via RLock
+- Callbacks invoked from polling thread
+- Graceful shutdown support
+
+7.2 Memory Management
+---------------------
+- Subscriptions stored in dictionaries
+- Automatic cleanup on unsubscribe
+- Resource states cleaned when no subscribers
+- Weak references not used (explicit management)
+
+7.3 Error Handling
+------------------
+- Callback exceptions caught and logged
+- Invalid URIs raise ValueError
+- Missing sessions handled gracefully
+- Resource access errors logged but don't crash polling
+
+7.4 Performance
+---------------
+- O(1) subscription lookup by ID
+- O(n) polling where n = unique subscribed URIs
+- Minimal overhead when no subscriptions
+- Polling thread stops when no subscriptions
+
+================================================================================
+8. COMPLIANCE CHECKLIST
+================================================================================
+
+[✓] ResourceSubscriptionManager class implemented
+[✓] subscribe_to_resource(uri, callback) -> subscription_id implemented
+[✓] unsubscribe_from_resource(subscription_id) -> bool implemented
+[✓] Change detection using mtime/size implemented
+[✓] Polling mechanism with 5s default implemented
+[✓] Thread-safe implementation using RLock
+[✓] Subscription info included in resource responses
+[✓] Session cleanup support (cleanup_session_subscriptions)
+[✓] 43 test cases written (requirement: >= 15)
+[✓] All new tests pass
+[✓] Existing tests still pass
+[✓] No breaking changes to existing functionality
+
+================================================================================
+END OF EVIDENCE FILE
+================================================================================

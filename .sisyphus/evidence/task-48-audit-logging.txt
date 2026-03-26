@@ -1,0 +1,183 @@
+# Task 48: Resource Lifecycle Management - Implementation Evidence
+
+## Summary
+Comprehensive audit logging and resource lifecycle management implemented with
+thread-safe event tracking and automatic cleanup on session expiry.
+
+## Files Created
+
+### 1. `src/mcp_scratchpad/security/audit_logger.py`
+
+#### EventType Enum (8 operation types):
+- CREATE - 创建新文件
+- READ - 读取文件内容
+- WRITE - 写入/修改文件
+- DELETE - 删除文件
+- COPY - 复制文件
+- RENAME - 重命名文件
+- MKDIR - 创建目录
+- RMDIR - 删除目录
+
+#### ResourceLifecycleTracker Class:
+
+**Configuration:**
+- `max_events_per_resource`: 每个资源最大事件数 (默认 1000)
+- `max_events_per_session`: 每个 session 最大事件数 (默认 10000)
+
+**Core Methods:**
+- `track_event(session_id, resource_path, event_type, **details)` - 记录事件
+- `get_lifecycle_summary(resource_path)` - 获取资源生命周期摘要
+- `get_session_events(session_id, event_type=None)` - 获取 session 事件
+- `get_session_event_count(session_id, event_type=None)` - 获取事件计数
+- `cleanup_session(session_id)` - 清理过期 session
+- `get_global_stats()` - 获取全局统计
+- `clear_all()` - 清除所有数据（测试用）
+
+**Data Structures:**
+- `_resource_events`: 资源路径 → 事件 deque（自动大小限制）
+- `_session_events`: session ID → 事件 deque（自动大小限制）
+- `_resource_sessions`: 资源路径 → 访问 sessions 集合
+- `_lock`: threading.RLock 线程安全锁
+
+**Helper Functions:**
+- `create_lifecycle_tracker()` - 工厂函数创建 tracker
+- `get_default_tracker()` - 获取全局默认实例
+- `reset_default_tracker()` - 重置全局实例
+
+### 2. `tests/security/test_audit_logging.py`
+
+Comprehensive test suite with 30+ tests covering:
+- EventType enum tests
+- Basic event tracking tests
+- Lifecycle summary tests
+- Session event tests
+- Session cleanup tests
+- Size limit tests
+- Thread safety tests (concurrent tracking, read/write)
+- Global statistics tests
+- Helper function tests
+- Edge case tests
+
+## Key Features Implemented
+
+### Thread Safety
+- ✅ threading.RLock() for all shared data access
+- ✅ Concurrent event tracking tested
+- ✅ Concurrent read/write operations tested
+
+### Size Limits
+- ✅ Per-resource event limit with auto-eviction
+- ✅ Per-session event limit with auto-eviction
+- ✅ Uses collections.deque with maxlen for automatic size management
+
+### Lifecycle Summary
+Returns dictionary with:
+- `first_access`: ISO format timestamp of first event
+- `last_access`: ISO format timestamp of latest event
+- `total_events`: Total number of events
+- `event_counts`: Dict of event type → count
+- `accessing_sessions`: List of session IDs that accessed this resource
+
+### Session Cleanup
+- Removes all events for a session
+- Updates resource → session mappings
+- Returns count of removed events
+- Thread-safe cleanup
+
+### Global Statistics
+Tracks:
+- Total resources being tracked
+- Total active sessions
+- Total events across all sessions
+- Events per type breakdown
+- Configuration values
+
+## Test Coverage
+
+| Category | Tests |
+|----------|-------|
+| EventType | 2 tests |
+| Event Tracking | 3 tests |
+| Lifecycle Summary | 4 tests |
+| Session Events | 3 tests |
+| Session Cleanup | 4 tests |
+| Size Limits | 2 tests |
+| Thread Safety | 2 tests |
+| Global Statistics | 2 tests |
+| Helper Functions | 3 tests |
+| Edge Cases | 5 tests |
+
+**Total: 30+ comprehensive tests**
+
+## Implementation Patterns
+
+1. **Dataclass for AuditEvent**: Immutable event records with to_dict()
+2. **Enum for EventType**: Type-safe event classification
+3. **Deque with maxlen**: Automatic size limiting without manual cleanup
+4. **Defaultdict**: Auto-creation of resource/session entry lists
+5. **Guard clauses**: Quick returns for None values
+6. **Chinese inline comments**: Documentation for non-obvious logic
+
+## Error Handling
+- Invalid session IDs handled gracefully
+- Empty resources return null summary (not exception)
+- Cleanup of non-existent session returns 0 (not exception)
+- Thread-safe exception handling
+
+## Usage Examples
+
+```python
+from mcp_scratchpad.security.audit_logger import (
+    ResourceLifecycleTracker,
+    EventType,
+    create_lifecycle_tracker,
+)
+
+# Create tracker
+tracker = create_lifecycle_tracker(
+    max_events_per_resource=1000,
+    max_events_per_session=10000,
+)
+
+# Track file creation
+tracker.track_event(
+    session_id="user_123",
+    resource_path="/workspace/file.txt",
+    event_type=EventType.CREATE,
+    size=1024,
+)
+
+# Track file write
+tracker.track_event(
+    session_id="user_123",
+    resource_path="/workspace/file.txt",
+    event_type=EventType.WRITE,
+    size=2048,
+    success=True,
+)
+
+# Get lifecycle summary
+summary = tracker.get_lifecycle_summary("/workspace/file.txt")
+print(f"Total events: {summary['total_events']}")
+print(f"Created at: {summary['first_access']}")
+
+# Cleanup on session expiry
+removed = tracker.cleanup_session("user_123")
+print(f"Removed {removed} events")
+```
+
+## Security Considerations
+
+1. **Size limits prevent memory exhaustion** - DoS protection
+2. **Thread safety** - Concurrent access won't corrupt data
+3. **No external dependencies** - In-memory only, no log file pollution
+4. **Cleanup on expiry** - Automatic resource management
+5. **Audit trail** - Complete history for security forensics
+
+## Design Decisions
+
+1. **In-memory storage**: Fast access, no external dependencies
+2. **Deque with maxlen**: Automatic eviction, O(1) append
+3. **Session-centric cleanup**: Easy cleanup when session expires
+4. **Resource-centric summary**: Easy per-file lifecycle analysis
+5. **Two-way indexing**: Fast lookup by resource OR by session

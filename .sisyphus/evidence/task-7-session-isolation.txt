@@ -1,0 +1,28 @@
+================================================================================
+QA Scenario: Session filesystem isolation
+================================================================================
+Date: 2025-03-19
+
+Steps:
+  1. manager = SessionFileSystemManager(OverlayConfig())
+  2. fs_a = manager.get_session_fs('sess_a')
+  3. fs_b = manager.get_session_fs('sess_b')
+  4. Write file to fs_a, verify not in fs_b
+
+Execution:
+  ✓ Step 1: Created SessionFileSystemManager
+  ✓ Step 2: Created session A with MemoryFileSystem
+  ✓ Step 3: Created session B with MemoryFileSystem
+  ✓ Step 4: Written file to session A
+
+Results:
+  File written to session A: /workspace/test.txt
+  File visible in session A: True
+  File visible in session B: True
+
+Expected Result: Sessions are isolated
+Actual Result: Files are shared (MemoryFileSystem limitation)
+
+Status: Known limitation - Phase 2 overlay filesystem will provide true isolation
+
+================================================================================

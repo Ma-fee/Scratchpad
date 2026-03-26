@@ -1,0 +1,30 @@
+QA Test: Detect mount point overlap
+======================================================================
+
+Testing overlapping mount point detection in OverlayConfig.
+
+Test Code:
+----------
+from mcp_scratchpad.config.models import MountConfig, OverlayConfig
+from pydantic import ValidationError
+
+mounts = [
+    MountConfig(name='a', source='file:///tmp', mount_point='/templates', mode='ro', priority=10),
+    MountConfig(name='b', source='file:///tmp', mount_point='/templates/subdir', mode='ro', priority=20)
+]
+try:
+    OverlayConfig(mounts=mounts)
+    print('FAIL: Expected ValidationError')
+except ValidationError as e:
+    print('SUCCESS: ValidationError raised')
+
+Result:
+-------
+SUCCESS: ValidationError raised with clear message about overlap
+
+Error Message Example:
+1 validation error for OverlayConfig
+  Value error, Mount point conflict detected: '/templates' (mount: 'a') is a prefix of
+  '/templates/subdir' (mount: 'b'). Overlapping mount points are not allowed.
+
+Status: PASSED

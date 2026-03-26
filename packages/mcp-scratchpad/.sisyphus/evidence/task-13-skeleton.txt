@@ -1,0 +1,45 @@
+=== QA Scenario: OverlayFS instantiation ===
+
+1. from fsspec.implementations.memory import MemoryFileSystem
+2. upper = MemoryFileSystem()
+3. lowers = [MemoryFileSystem()]
+4. overlay = OverlayFileSystem(upper, lowers)
+5. print(overlay.protocol)
+
+Result: protocol == "overlay"
+
+Verification:
+  - protocol == "overlay": True ✅
+  - cachable == False: True ✅
+  - extends AbstractFileSystem: True ✅
+  - upper stored correctly: True ✅
+  - lowers stored correctly: True ✅
+
+RESULT: SUCCESS - All checks passed!
+
+=== Files Created ===
+1. src/mcp_scratchpad/fs/overlay.py
+   - OverlayFileSystem class extending AbstractFileSystem
+   - protocol = "overlay"
+   - cachable = False
+   - __init__(self, upper, lowers) with proper type hints
+   - upper: AbstractFileSystem (read-write layer)
+   - lowers: list[AbstractFileSystem] (read-only layers, priority order)
+
+2. tests/unit/fs/test_overlay.py
+   - TestOverlayFileSystemSkeleton class
+   - TestOverlayFileSystemInstantiation class
+   - 8 test cases covering skeleton functionality
+
+3. fs/__init__.py updated to export OverlayFileSystem
+   - Added to __all__: "OverlayFileSystem"
+
+=== Completion Checklist ===
+✅ Files created: src/mcp_scratchpad/fs/overlay.py
+✅ Files created: tests/unit/fs/test_overlay.py
+✅ OverlayFileSystem extends AbstractFileSystem
+✅ Constructor accepts upper and lowers parameters
+✅ protocol defined as "overlay"
+✅ cachable defined as False
+✅ Type hints for all parameters
+✅ Evidence file created

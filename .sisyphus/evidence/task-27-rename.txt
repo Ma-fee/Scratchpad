@@ -1,0 +1,105 @@
+# Task 27: Edge Case - Rename with COW for OverlayFileSystem
+
+## Summary
+Successfully implemented `rename()` method with Copy-on-Write (COW) semantics for OverlayFileSystem.
+
+## Implementation Details
+
+### Files Modified
+1. `src/mcp_scratchpad/fs/overlay.py` - Added `rename()` method
+2. `tests/unit/fs/test_overlay.py` - Added 15 comprehensive tests
+
+### rename() Method Features
+
+#### COW Semantics
+- Renaming a file from lower layer triggers COW (copy to upper first)
+- Original lower layer file is hidden with a whiteout marker
+- Lower layer remains unchanged (preserving immutability)
+
+#### Cross-Directory Support
+- Automatically creates parent directories for destination
+- Works with deeply nested paths (e.g., `/a/b/c` to `/x/y/z`)
+
+#### Overwrite Behavior
+- If target exists in upper layer: removes and replaces
+- If target exists in lower layer: creates upper layer copy (overlay semantics)
+
+#### Error Handling
+- Raises `FileNotFoundError` if source doesn't exist
+- Raises `IsADirectoryError` if source is a directory (not supported)
+
+### Test Coverage
+
+Added 15 tests across two classes:
+
+#### TestOverlayRename (9 tests)
+1. `test_rename_upper_to_upper_same_dir` - Basic rename within upper layer
+2. `test_rename_lower_to_upper_triggers_cow` - COW trigger from lower layer
+3. `test_rename_across_directories` - Cross-directory move with auto-mkdir
+4. `test_rename_overwrite_upper_layer_target` - Overwrite upper layer file
+5. `test_rename_overwrite_lower_layer_target` - Overwrite lower layer file
+6. `test_rename_raises_for_nonexistent_source` - Error on missing source
+7. `test_rename_raises_for_directory` - Error on directory source
+8. `test_rename_preserves_binary_content` - Binary preservation
+9. `test_rename_deeply_nested_path` - Deep path support
+10. `test_rename_without_leading_slash` - Path normalization
+
+#### TestOverlayRenameQAScenarios (5 tests)
+1. `test_rename_upper_to_upper_scenario` - QA scenario for upper→upper
+2. `test_rename_lower_triggers_cow_scenario` - QA scenario for COW
+3. `test_rename_overwrite_scenario` - QA scenario for overwrite
+4. `test_rename_across_directories_scenario` - QA scenario for cross-dir
+5. `test_rename_lower_to_different_dir_triggers_cow` - QA scenario for lower→different dir
+
+## Test Results
+
+```
+pytest tests/unit/fs/test_overlay.py::TestOverlayRename tests/unit/fs/test_overlay.py::TestOverlayRenameQAScenarios -v
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.2, pytest-9.0.1, pluggy-1.6.0
+collected 15 items
+
+tests/unit/fs/test_overlay.py ...............                            [100%]
+
+============================== 15 passed in 0.31s ==============================
+```
+
+All tests pass successfully.
+
+## Verification Checklist
+
+- [x] `rename(src, dst)` moves files within upper layer
+- [x] Renaming a lower layer file triggers COW (copy to upper then rename)
+- [x] Renaming across directories works correctly
+- [x] Handles edge case: rename to existing file (overwrite behavior)
+- [x] Tests added to `tests/unit/fs/test_overlay.py`
+- [x] Evidence file created: `.sisyphus/evidence/task-27-rename.txt`
+
+## Implementation Notes
+
+### Key Design Decisions
+
+1. **COW First**: When renaming lower layer files, we first copy-up to upper layer,
+   then move the copied file to destination. This ensures atomic-like semantics.
+
+2. **Whiteout for Lower Layer Sources**: When the source is in lower layer, we create
+   a whiteout marker to hide the original file after "moving" it.
+
+3. **Upper Layer Direct Removal**: When source is already in upper layer, we simply
+   delete it after copying to destination.
+
+4. **Reuse rm() for Target**: We use the existing `rm()` method to handle target
+   removal, which properly handles both upper and lower layer targets with whiteout.
+
+### Whiteout Interaction
+
+During rename from lower layer:
+1. File copied to upper layer (COW)
+2. File copied from upper source to upper destination
+3. Whiteout marker created for original source (hides lower layer file)
+4. Copied-up source removed from upper layer
+
+Result: Original lower layer file is hidden, destination has the content.
+
+Date: 2026-03-19

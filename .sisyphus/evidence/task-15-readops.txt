@@ -1,0 +1,65 @@
+# Task 15: Overlay Read Operations - Evidence
+
+## Implementation Summary
+
+### Methods Added
+
+1. **ls(self, path: str, **kwargs) -> list[str]**
+   - Merges directory listings from all layers (upper + lowers)
+   - Uses set-based deduplication with upper layer taking precedence
+   - Handles both string and dict entry formats (fsspec compatibility)
+   - Returns sorted list of unique entry basenames
+
+2. **exists(self, path: str, **kwargs) -> bool**
+   - Uses _resolve() to check if path exists in any layer
+   - Returns True if found, False otherwise
+
+3. **isfile(self, path: str, **kwargs) -> bool**
+   - Resolves path to source layer
+   - Returns fs.isfile() result from that layer
+   - Returns False if path doesn't exist
+
+4. **isdir(self, path: str, **kwargs) -> bool**
+   - Checks upper layer first, then each lower layer
+   - Returns True if any layer has it as a directory
+   - Returns False otherwise
+
+## Test Results
+
+```
+tests/unit/fs/test_overlay.py::TestOverlayFileSystemReadOps - 19 PASSED
+
+Test Breakdown:
+- test_ls_merges_multiple_layers PASSED
+- test_ls_removes_duplicates_upper_visible PASSED
+- test_ls_returns_sorted_list PASSED
+- test_ls_empty_directory PASSED
+- test_ls_nonexistent_directory PASSED
+- test_ls_multi_layer_merge PASSED
+- test_ls_shows_only_unique_entries PASSED
+- test_exists_returns_true_if_in_upper PASSED
+- test_exists_returns_true_if_in_lower PASSED
+- test_exists_returns_false_if_not_in_any_layer PASSED
+- test_exists_works_with_directories PASSED
+- test_isfile_returns_true_for_file_in_upper PASSED
+- test_isfile_returns_true_for_file_in_lower PASSED
+- test_isfile_returns_false_for_directory PASSED
+- test_isfile_returns_false_for_nonexistent PASSED
+- test_isdir_returns_true_for_dir_in_upper PASSED
+- test_isdir_returns_true_for_dir_in_lower PASSED
+- test_isdir_returns_false_for_file PASSED
+- test_isdir_returns_false_for_nonexistent PASSED
+```
+
+## Key Implementation Details
+
+1. **Duplicate Handling**: Upper layer entries take precedence using a set to track seen names
+2. **Entry Format Support**: Handles both string paths and fsspec dict entries with 'name' field
+3. **Sorted Output**: Always returns sorted list for consistent behavior
+4. **Error Handling**: Gracefully handles exceptions from underlying filesystems
+
+## Files Modified
+
+- src/mcp_scratchpad/fs/overlay.py: Added ls(), exists(), isfile(), isdir()
+- tests/unit/fs/test_overlay.py: Added TestOverlayFileSystemReadOps class
+

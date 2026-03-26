@@ -1,0 +1,39 @@
+# Task 2 Evidence: Invalid Name Format Rejected
+
+## Test Case: Invalid name format rejected
+
+### Command
+```bash
+cd /Users/yuchen.liu/src/yilab/mcp-scratchpad/packages/mcp-scratchpad
+python -c "
+from mcp_scratchpad.config.models import MountConfig
+MountConfig(name='123invalid', source='file:///tmp', mount_point='/tmp', mode='ro')
+"
+```
+
+### Expected Result
+Script exits with ValidationError
+
+### Status: PASS
+
+Validation correctly rejects invalid names:
+
+| Invalid Name | Reason |
+|-------------|--------|
+| `123invalid` | Must start with letter |
+| `_underscore` | Must start with letter |
+| `-dash` | Must start with letter |
+| `name with space` | Contains space |
+| `name.with.dots` | Contains dots |
+| `name/with/slashes` | Contains slashes |
+| `name\with\backslashes` | Contains backslashes |
+| `name:with:colons` | Contains colons |
+
+Valid patterns accepted:
+- `validname` - Starts with letter, alphanumeric only
+- `ValidName` - Mixed case accepted
+- `valid_name` - Underscores allowed
+- `valid-name` - Hyphens allowed
+- `validName123` - Numbers allowed after first letter
+- `A` - Minimum length (1 char) valid name
+- `a_123_b` - Complex valid name

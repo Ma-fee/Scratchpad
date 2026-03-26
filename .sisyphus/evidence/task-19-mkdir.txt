@@ -1,0 +1,70 @@
+Task 19: Directory Creation - mkdir() and makedirs() Implementation
+====================================================================
+
+Date: 2026-03-19
+Files Modified:
+  - packages/mcp-scratchpad/src/mcp_scratchpad/fs/overlay.py
+  - packages/mcp-scratchpad/tests/unit/fs/test_overlay.py
+
+Implementation Summary
+----------------------
+Implemented mkdir() and makedirs() methods in OverlayFileSystem class:
+
+1. mkdir(path, create_parents=False, **kwargs)
+   - Creates single directory in upper layer only
+   - If create_parents=True: delegates to upper.makedirs()
+   - If create_parents=False: validates parent exists, then calls upper.mkdir()
+   - Raises FileExistsError if directory already exists in upper layer
+
+2. makedirs(path, exist_ok=False, **kwargs)
+   - Creates directory and all parent directories in upper layer only
+   - If exist_ok=True: returns without error if directory exists
+   - If exist_ok=False: raises FileExistsError if directory exists
+   - Delegates to upper.makedirs() with exist_ok=False
+
+Key Design Decisions:
+  - All writes go to upper layer only (lower layers are read-only)
+  - Path normalization is applied to ensure consistent behavior
+  - Error handling follows fsspec conventions (FileExistsError, FileNotFoundError)
+
+Test Results
+------------
+pytest tests/unit/fs/test_overlay.py::TestOverlayMkdir tests/unit/fs/test_overlay.py::TestOverlayMakedirs tests/unit/fs/test_overlay.py::TestOverlayMkdirQA -v
+
+All 14 tests passed:
+  - test_mkdir_creates_directory_in_upper
+  - test_mkdir_raises_if_parent_missing
+  - test_mkdir_with_create_parents_creates_parents
+  - test_mkdir_raises_if_directory_exists_in_upper
+  - test_mkdir_allows_directory_in_lower
+  - test_mkdir_path_normalization
+  - test_makedirs_creates_nested_directories
+  - test_makedirs_with_exist_ok_does_not_raise
+  - test_makedirs_raises_if_exists_and_exist_ok_false
+  - test_makedirs_only_creates_in_upper_not_lower
+  - test_makedirs_path_normalization
+  - test_directory_creation_in_upper_layer (QA scenario)
+  - test_mkdir_creates_only_in_upper_not_lower (QA scenario)
+  - test_makedirs_with_exist_ok_scenario (QA scenario)
+
+QA Scenario Verification
+-------------------------
+Scenario: Directory creation in upper layer
+  Steps:
+    1. overlay = OverlayFileSystem(upper, [lower])
+    2. overlay.mkdir("/newdir")
+    3. assert upper.isdir("/newdir")  ✓ PASSED
+    4. overlay.makedirs("/a/b/c")
+    5. assert upper.isdir("/a/b/c")  ✓ PASSED
+  Expected: Directories created in upper only
+  Result: All assertions passed
+
+Code Coverage
+-------------
+OverlayFileSystem methods coverage:
+  - mkdir: Implemented with path normalization and error handling
+  - makedirs: Implemented with exist_ok parameter support
+
+Lower layer verification:
+  - Confirmed directories are NEVER created in lower layers
+  - Only upper layer is modified during directory creation

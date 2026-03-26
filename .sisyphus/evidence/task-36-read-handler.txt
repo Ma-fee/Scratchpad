@@ -1,0 +1,207 @@
+================================================================================
+Task 36: Resource Read Handler - Evidence of Completion
+================================================================================
+Date: 2026-03-19
+Task Status: COMPLETED
+
+================================================================================
+1. IMPLEMENTATION SUMMARY
+================================================================================
+
+Implemented resource read functionality for scratchpad:// URIs with comprehensive
+MIME type detection and content handling for text, binary, and image files.
+
+Key Components:
+  - read_resource(uri): Main function to read resources
+  - detect_mime_type(): MIME type detection from extension and content
+  - classify_content_type(): Content classification (text/binary/image/json/xml)
+  - read_file_content(): File reading with appropriate encoding
+  - get_resource_metadata(): Metadata extraction
+  - Helper functions: read_resource_text(), read_resource_bytes()
+
+================================================================================
+2. FILES CREATED/MODIFIED
+================================================================================
+
+Created:
+  - src/mcp_scratchpad/resources/read_handler.py (927 lines)
+  - tests/unit/resources/test_read_handler.py (868 lines)
+
+Modified:
+  - src/mcp_scratchpad/resources/__init__.py (added exports)
+
+================================================================================
+3. FEATURES IMPLEMENTED
+================================================================================
+
+✓ URI Parsing
+  - Parse scratchpad:// URIs into session_id and path components
+  - Validation of session ID format
+  - Path normalization and traversal protection
+
+✓ MIME Type Detection
+  - Extension-based detection using mimetypes module
+  - Content-based detection using file signatures
+  - Override mapping for common extensions (.py, .js, .ts, .md, etc.)
+  - Supported: 50+ MIME types
+
+✓ Text File Handling
+  - UTF-8 encoding as default
+  - Automatic fallback to binary on decode errors
+  - Returns Python string for text content
+
+✓ Binary File Handling
+  - Returns bytes wrapped in ResourceContent
+  - Base64 encoding indicator
+  - Size tracking
+
+✓ Image File Handling
+  - Special IMAGE content type classification
+  - PNG/JPEG/GIF/WebP/SVG support
+  - MIME types preserved: image/png, image/jpeg, etc.
+
+✓ Error Handling
+  - Invalid URI detection
+  - Missing session handling
+  - Missing file handling
+  - Directory vs file detection
+  - File size limit enforcement
+  - Session manager availability check
+
+================================================================================
+4. TEST RESULTS
+================================================================================
+
+Test Suite: tests/unit/resources/test_read_handler.py
+Total Tests: 56
+Passed: 56
+Failed: 0
+Coverage: 87% (read_handler.py)
+
+Test Categories:
+  - TestDetectMimeType: 11 tests (extension and content-based detection)
+  - TestClassifyContentType: 4 tests (content type classification)
+  - TestIsBinaryContent: 6 tests (binary content detection)
+  - TestResourceContent: 3 tests (content dataclass methods)
+  - TestReadFileContent: 5 tests (file reading with modes)
+  - TestGetResourceMetadata: 6 tests (metadata extraction)
+  - TestReadResource: 9 tests (main read function)
+  - TestReadResourceHelpers: 3 tests (helper functions)
+  - TestIntegration: 4 tests (end-to-end with real session)
+  - TestMimeTypeConstants: 5 tests (MIME type definitions)
+
+================================================================================
+5. API USAGE
+================================================================================
+
+Example 1: Read a text file
+    >>> from mcp_scratchpad.resources import read_resource
+    >>> result = read_resource("scratchpad://abc-123/workspace/file.txt")
+    >>> result.success
+    True
+    >>> result.content.data
+    'Hello, World!'
+    >>> result.metadata.mime_type
+    'text/plain'
+
+Example 2: Read a binary file
+    >>> result = read_resource("scratchpad://abc-123/image.png")
+    >>> result.content.is_binary
+    True
+    >>> result.content.encoding
+    'base64'
+    >>> result.metadata.content_type
+    'image'
+
+Example 3: Error handling
+    >>> result = read_resource("scratchpad://invalid/file.txt")
+    >>> result.success
+    False
+    >>> result.error
+    "Session not found: invalid"
+
+Example 4: Helper functions
+    >>> text = read_resource_text("scratchpad://abc-123/config.json")
+    >>> bytes_data = read_resource_bytes("scratchpad://abc-123/image.png")
+
+================================================================================
+6. CONTENT TYPE HANDLING
+================================================================================
+
+Text Types (decoded as UTF-8):
+  text/plain, text/html, text/css, text/javascript, text/markdown
+  text/x-python, text/typescript, text/jsx, text/yaml, text/xml
+  application/json, application/javascript, application/xml
+
+Binary Types (returned as bytes):
+  application/octet-stream, application/pdf, application/zip
+  application/gzip, application/x-tar, application/x-executable
+
+Image Types (special handling):
+  image/jpeg, image/png, image/gif, image/webp
+  image/svg+xml, image/bmp, image/tiff
+
+JSON Types (parsed structure):
+  application/json (classification: json)
+
+XML Types (parsed structure):
+  application/xml, text/xml (classification: xml)
+
+================================================================================
+7. MIME TYPE DETECTION SIGNATURES
+================================================================================
+
+Content-based detection using file magic numbers:
+  PNG:  b'\x89PNG\r\n\x1a\n'
+  JPEG: b'\xff\xd8\xff'
+  GIF:  b'GIF87a' or b'GIF89a'
+  WEBP: b'RIFF....WEBP'
+  PDF:  b'%PDF-'
+  ZIP:  b'PK\x03\x04'
+  GZIP: b'\x1f\x8b'
+  TAR:  b'ustar\x00'
+
+================================================================================
+8. ERROR CODES
+================================================================================
+
+Errors are handled gracefully with success=False and error message:
+  - "Invalid scheme: expected 'scratchpad', got 'xxx'"
+  - "Invalid session_id format: 'xxx'"
+  - "Session not found: {session_id}"
+  - "File not found: {path}"
+  - "Path is a directory, not a file: {path}"
+  - "Session manager not available"
+  - "File too large: {size} bytes exceeds limit of {max} bytes"
+
+================================================================================
+9. VERIFICATION COMMANDS
+================================================================================
+
+Run tests:
+    uv run pytest tests/unit/resources/test_read_handler.py -v
+
+Check coverage:
+    uv run pytest tests/unit/resources/test_read_handler.py --cov=src/mcp_scratchpad/resources/read_handler --cov-report=term
+
+Import test:
+    uv run python -c "from mcp_scratchpad.resources import read_resource; print('OK')"
+
+================================================================================
+10. ACCEPTANCE CRITERIA CHECKLIST
+================================================================================
+
+[X] read_resource(uri) function implemented
+[X] MIME type detection for common file types
+[X] Text files returned as UTF-8 strings
+[X] Binary files handled appropriately (bytes with encoding indicator)
+[X] Error handling for missing files
+[X] Error handling for invalid URIs
+[X] Error handling for missing sessions
+[X] Error handling for directory paths
+[X] Tests created in tests/unit/resources/test_read_handler.py
+[X] All tests passing (56/56)
+
+================================================================================
+END OF EVIDENCE FILE
+================================================================================

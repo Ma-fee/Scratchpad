@@ -1,0 +1,174 @@
+Task 37: Directory Resource Listing for MCP Resources - Implementation Evidence
+================================================================================
+
+IMPLEMENTATION SUMMARY
+----------------------
+Implemented `read_directory_resource()` function in `src/mcp_scratchpad/resources/read_handler.py`
+to provide structured directory listing with pagination support for scratchpad:// URIs.
+
+FILES MODIFIED
+--------------
+1. packages/mcp-scratchpad/src/mcp_scratchpad/resources/read_handler.py
+   - Added DirectoryEntry dataclass (lines 217-256)
+   - Added DirectoryListingResult dataclass (lines 259-318)
+   - Added read_directory_resource() function (lines 946-1157)
+
+2. packages/mcp-scratchpad/tests/unit/resources/test_read_handler.py
+   - Added TestReadDirectoryResource class with 11 test cases
+   - Added TestIntegrationDirectoryListing class with 2 test cases
+   - Total: 17 new test cases for directory listing
+
+DATACLASS DEFINITIONS
+---------------------
+
+DirectoryEntry:
+  - name: str - Entry name (filename or directory name)
+  - type: str - Entry type ('file' or 'directory')
+  - size: int - File size in bytes (0 for directories)
+  - mimetype: Optional[str] - MIME type (None for directories)
+  - modified_time: Optional[str] - ISO format timestamp
+  - to_dict(): Convert to dictionary representation
+
+DirectoryListingResult:
+  - uri: str - Original scratchpad:// URI
+  - session_id: str - Session identifier
+  - path: str - Directory path within session
+  - entries: list[DirectoryEntry] - List of directory entries
+  - total_count: int - Total number of entries
+  - has_more: bool - Whether more entries exist beyond this page
+  - offset: int - Current skip count
+  - limit: int - Current page size
+  - success: bool - Operation success status
+  - error: Optional[str] - Error message if failed
+  - to_dict(): Convert to dictionary representation
+
+FUNCTION SIGNATURE
+------------------
+def read_directory_resource(
+    uri: str,
+    session_manager: Optional[SessionFileSystemManager] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> DirectoryListingResult
+
+PAGINATION SUPPORT
+------------------
+- Default limit: 100 entries per page
+- Offset-based pagination for large directories
+- has_more flag indicates if more entries exist
+- Parameters returned in result for client tracking
+
+ERROR HANDLING
+--------------
+The function handles these error cases gracefully:
+  - Invalid URI scheme
+  - Empty URI
+  - Missing session_id
+  - Session not found
+  - Resource not found (directory doesn't exist)
+  - Resource is not a directory
+  - Session manager not available
+  - Directory listing failure (ls error)
+
+Each error returns a DirectoryListingResult with:
+  - success=False
+  - Descriptive error message
+  - Other fields set to default/empty values
+
+PER ENTRY METADATA
+------------------
+Each directory entry includes:
+  - name: Filename or directory name
+  - type: 'file' or 'directory'
+  - size: File size in bytes (0 for directories)
+  - mimetype: Auto-detected MIME type using detect_mime_type()
+  - modified_time: ISO format last modification timestamp
+
+TEST COVERAGE
+-------------
+73 total tests pass, including 17 new directory listing tests:
+
+Unit Tests (TestReadDirectoryResource):
+  1. test_list_directory_success - Basic directory listing
+  2. test_list_empty_directory - Empty directory handling
+  3. test_directory_pagination - Pagination with multiple pages
+  4. test_directory_invalid_uri - Invalid URI error handling
+  5. test_directory_empty_uri - Empty URI error handling
+  6. test_directory_missing_session_id - Missing session ID error
+  7. test_directory_session_not_found - Session not found error
+  8. test_directory_not_found - Directory not found error
+  9. test_resource_is_not_directory - File instead of directory error
+  10. test_directory_no_session_manager - No session manager error
+  11. test_directory_entry_types - Entry type and metadata verification
+  12. test_directory_listing_with_various_mime_types - MIME type detection
+  13. test_directory_ls_error - ls() failure handling
+  14. test_directory_result_to_dict - Result serialization
+  15. test_directory_entry_to_dict - Entry serialization
+
+Integration Tests (TestIntegrationDirectoryListing):
+  16. test_list_real_directory - Real filesystem directory listing
+  17. test_list_real_directory_pagination - Real filesystem pagination
+
+TEST RESULTS
+------------
+$ cd packages/mcp-scratchpad && uv run pytest tests/unit/resources/test_read_handler.py -v
+
+============================= test session starts ==============================
+platform darwin -- Python 3.14.2, pytest-9.0.1
+collected 73 items
+tests/unit/resources/test_read_handler.py .............................. [ 41%]
+...........................................                               [100%]
+============================== 73 passed in 0.28s ==============================
+
+PATTERNS FOLLOWED
+-----------------
+The implementation follows existing patterns in read_handler.py:
+1. URI parsing using parse_scratchpad_uri()
+2. Session validation using session_manager.get_session_fs()
+3. Error handling returning result objects instead of raising exceptions
+4. Metadata extraction using fs.info()
+5. MIME type detection using detect_mime_type()
+6. Result serialization with to_dict() methods
+7. Integration with global session manager for testing
+
+USAGE EXAMPLES
+--------------
+
+Basic directory listing:
+    >>> from mcp_scratchpad.resources.read_handler import read_directory_resource
+    >>> result = read_directory_resource("scratchpad://abc-123/workspace/")
+    >>> result.success
+    True
+    >>> len(result.entries)
+    5
+    >>> result.entries[0].name
+    'file.txt'
+
+Pagination:
+    >>> result = read_directory_resource(
+    ...     "scratchpad://abc-123/workspace/",
+    ...     limit=10,
+    ...     offset=20
+    ... )
+    >>> result.has_more
+    True
+    >>> result.total_count
+    50
+
+Serializing result:
+    >>> data = result.to_dict()
+    >>> data.keys()
+    dict_keys(['uri', 'session_id', 'path', 'entries', 'total_count', 
+               'has_more', 'offset', 'limit', 'success', 'error'])
+
+VERIFICATION
+------------
+- [x] Function implemented with required parameters
+- [x] Supports pagination (limit/offset)
+- [x] Returns structured entries with metadata
+- [x] Error handling for all edge cases
+- [x] 73 tests pass (17 new, 56 existing)
+- [x] Follows existing code patterns
+- [x] No breaking changes to existing functions
+
+IMPLEMENTATION DATE: 2026-03-19
