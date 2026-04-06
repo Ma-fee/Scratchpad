@@ -1,14 +1,20 @@
 """Edit tool - 编辑文件（字符串替换）"""
 
+from __future__ import annotations
+
 import re
 from collections.abc import Generator
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastmcp import FastMCP
 from pydantic import Field
 
-from ..path_resolver import PathResolutionError, get_path_description, resolve_file_path
+from ..fs.unified_adapter import UnifiedSessionFSAdapter
+from ..path_resolver import get_path_description
 from ..storage import get_store
+
+if TYPE_CHECKING:
+    from ..fs.session_manager import SessionFileSystemManager
 
 
 def normalize_line_endings(text: str) -> str:
@@ -397,7 +403,50 @@ def replace_content(
     )
 
 
-def register_edit(mcp: FastMCP):
+def _build_adapter(
+    session_manager: SessionFileSystemManager | None,
+    adapter: UnifiedSessionFSAdapter | None = None,
+) -> UnifiedSessionFSAdapter:
+    """Build unified adapter for edit operations."""
+    if adapter is not None:
+        return adapter
+    return UnifiedSessionFSAdapter(
+        session_manager=session_manager,
+        store=get_store(),
+        unified_enabled=True,
+    )
+
+
+def apply_edit_with_session(
+    *,
+    session_id: str | None,
+    file_path: str,
+    old_string: str,
+    new_string: str,
+    replace_all: bool,
+    session_manager: SessionFileSystemManager | None = None,
+    adapter: UnifiedSessionFSAdapter | None = None,
+) -> str:
+    """Apply text edit using session-aware unified adapter."""
+    if not session_id:
+        raise ValueError("session_id is required")
+
+    active_adapter = _build_adapter(session_manager, adapter)
+    read_result = active_adapter.read_text(session_id, file_path)
+    new_content = replace_content(
+        read_result.content,
+        old_string,
+        new_string,
+        replace_all,
+    )
+    active_adapter.write_text(session_id, file_path, new_content)
+    return "Edit applied successfully."
+
+
+def register_edit(
+    mcp: FastMCP,
+    session_manager: SessionFileSystemManager | None = None,
+) -> None:
     @mcp.tool(
         name="edit",
         description=(
@@ -412,6 +461,10 @@ def register_edit(mcp: FastMCP):
         ),
     )
     async def edit(
+        session_id: str | None = Field(
+            default=None,
+            description="Session ID for session-scoped edit operations",
+        ),
         file_path: str = Field(description=get_path_description()),
         old_string: str = Field(description="The text to replace"),
         new_string: str = Field(
@@ -424,29 +477,13 @@ def register_edit(mcp: FastMCP):
     ) -> str:
         """编辑文件内容"""
         try:
-            try:
-                filepath = resolve_file_path(file_path, get_store())
-            except PathResolutionError as e:
-                raise ValueError(f"Invalid path: {e}") from e
-
-            # 检查文件是否存在
-            if not filepath.exists():
-                raise FileNotFoundError(f"File not found: {file_path}")
-
-            # 读取文件内容
-            with open(filepath, encoding="utf-8") as f:
-                content = f.read()
-
-            # 执行替换
-            new_content = replace_content(
-                content, old_string, new_string, replace_all or False
+            return apply_edit_with_session(
+                session_id=session_id,
+                file_path=file_path,
+                old_string=old_string,
+                new_string=new_string,
+                replace_all=replace_all or False,
+                session_manager=session_manager,
             )
-
-            # 写入文件
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(new_content)
-
-            return "Edit applied successfully."
-
         except Exception as e:
             raise ValueError(f"Error editing file: {e}") from e

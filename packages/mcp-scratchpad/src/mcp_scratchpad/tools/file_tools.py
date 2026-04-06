@@ -725,8 +725,8 @@ def register_file_tools(
             If provided, list_files will include files from overlay mounts.
     """
     register_read(mcp, session_manager=session_manager)
-    register_edit(mcp)
-    register_apply_diff(mcp)
+    register_edit(mcp, session_manager=session_manager)
+    register_apply_diff(mcp, session_manager=session_manager)
 
     @mcp.tool(
         name="list",

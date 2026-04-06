@@ -1,12 +1,19 @@
 """Read tool - 读取文件内容"""
 
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastmcp import FastMCP
 from pydantic import Field
 
+from ..fs.unified_adapter import UnifiedSessionFSAdapter
 from ..path_resolver import PathResolutionError, get_path_description, resolve_file_path
 from ..storage import get_store
+
+if TYPE_CHECKING:
+    from ..fs.session_manager import SessionFileSystemManager
 
 DEFAULT_READ_LIMIT = 2000
 MAX_LINE_LENGTH = 2000
@@ -133,7 +140,10 @@ def _resolve_overlay_path(file_path: str, session_manager) -> Path | None:
     return None
 
 
-def register_read(mcp: FastMCP, session_manager=None):
+def register_read(
+    mcp: FastMCP,
+    session_manager: SessionFileSystemManager | None = None,
+) -> None:
     @mcp.tool(
         name="read",
         description=(
@@ -152,6 +162,10 @@ def register_read(mcp: FastMCP, session_manager=None):
         ),
     )
     async def read(
+        session_id: str | None = Field(
+            default=None,
+            description="Session ID for session-scoped reads (optional)",
+        ),
         file_path: str = Field(description=get_path_description()),
         offset: int | None = Field(
             default=None, description="The line number to start reading from (0-based)"
@@ -162,6 +176,60 @@ def register_read(mcp: FastMCP, session_manager=None):
     ) -> str:
         """读取文件内容"""
         try:
+            if session_id and session_manager is not None:
+                adapter = UnifiedSessionFSAdapter(
+                    session_manager=session_manager,
+                    store=get_store(),
+                    unified_enabled=True,
+                )
+                result = adapter.read_text(session_id, file_path)
+                lines = result.content.splitlines()
+                offset = offset or 0
+                limit = limit or DEFAULT_READ_LIMIT
+
+                raw_lines = []
+                bytes_count = 0
+                truncated_by_bytes = False
+
+                for i in range(offset, min(len(lines), offset + limit)):
+                    line = lines[i]
+                    if len(line) > MAX_LINE_LENGTH:
+                        line = line[:MAX_LINE_LENGTH] + "..."
+                    line_size = len(line.encode("utf-8")) + (1 if raw_lines else 0)
+
+                    if bytes_count + line_size > MAX_BYTES:
+                        truncated_by_bytes = True
+                        break
+
+                    raw_lines.append(line)
+                    bytes_count += line_size
+
+                content = "\n".join(
+                    f"{(i + offset + 1):05d}| {line}"
+                    for i, line in enumerate(raw_lines)
+                )
+
+                output = f"<file>\n{content}\n"
+                total_lines = len(lines)
+                last_read_line = offset + len(raw_lines)
+                has_more_lines = total_lines > last_read_line
+
+                if truncated_by_bytes:
+                    output += (
+                        f"\n\n(Output truncated at {MAX_BYTES} bytes. "
+                        f"Use 'offset' parameter to read beyond line {last_read_line})"
+                    )
+                elif has_more_lines:
+                    output += (
+                        "\n\n(File has more lines. Use 'offset' parameter to read "
+                        f"beyond line {last_read_line})"
+                    )
+                else:
+                    output += f"\n\n(End of file - total {total_lines} lines)"
+
+                output += "\n</file>"
+                return output
+
             try:
                 filepath = resolve_file_path(file_path, get_store())
             except PathResolutionError as e:
