@@ -290,3 +290,6 @@ fabric.properties
 **/output
 **/outputs
 **/build
+.worktrees/
+
+.worktrees/
