@@ -236,11 +236,13 @@ git commit -m "feat(fs): add unified session filesystem adapter"
 
 ### Task 3: Make Session Manager Return True Overlay FS for Sessions
 
+Status: Completed on 2026-04-07 (`4b13bbd`)
+
 **Files:**
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/fs/session_manager.py`
 - Test: `packages/mcp-scratchpad/tests/unit/fs/test_session_manager.py`
 
-- [ ] **Step 1: Write failing tests for overlay session FS**
+- [x] **Step 1: Write failing tests for overlay session FS**
 
 ```python
 def test_get_session_fs_returns_overlay_filesystem() -> None:
@@ -263,7 +265,7 @@ def test_session_overlay_reads_from_lower_and_writes_to_upper() -> None:
     assert fs.exists("/workspace/new.txt")
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 ```bash
@@ -273,7 +275,7 @@ uv run pytest tests/unit/fs/test_session_manager.py -q
 
 Expected: FAIL due to non-overlay session FS.
 
-- [ ] **Step 3: Implement overlay-backed session creation**
+- [x] **Step 3: Implement overlay-backed session creation**
 
 ```python
 # session_manager.py (concept)
@@ -283,7 +285,7 @@ overlay = OverlayFileSystem(upper=upper, lowers=lowers, session_id=session_id)
 self._sessions[session_id] = overlay
 ```
 
-- [ ] **Step 4: Re-run tests to green**
+- [x] **Step 4: Re-run tests to green**
 
 Run:
 ```bash
@@ -293,7 +295,7 @@ uv run pytest tests/unit/fs/test_session_manager.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/mcp-scratchpad/src/mcp_scratchpad/fs/session_manager.py \
