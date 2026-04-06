@@ -194,11 +194,7 @@ def load_overlay_config(
             f"Invalid config in '{found_path}': 'overlay' must be a mapping"
         )
 
-    # Determine mounts list, preferring overlay section
-    overlay_mounts = overlay_section.get("mounts") if overlay_section else None
-    mounts_data = (
-        overlay_mounts if overlay_mounts is not None else config_dict.get("mounts", [])
-    )
+    mounts_data = config_dict.get("mounts", [])
 
     if not isinstance(mounts_data, list):
         raise ConfigValidationError(
@@ -224,11 +220,12 @@ def load_overlay_config(
 
     rollout_data = {}
     if overlay_section:
-        rollout_data = overlay_section.get("rollout", {}) or {}
-        if rollout_data and not isinstance(rollout_data, dict):
+        rollout_value = overlay_section.get("rollout", {}) or {}
+        if rollout_value and not isinstance(rollout_value, dict):
             raise ConfigValidationError(
                 f"Invalid config in '{found_path}': 'overlay.rollout' must be a mapping"
             )
+        rollout_data = rollout_value
 
     try:
         overlay_config = OverlayConfig(mounts=mounts, rollout=rollout_data)
