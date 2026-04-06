@@ -376,6 +376,8 @@ git commit -m "feat(uri): standardize canonical scratchpad session uri format"
 
 ### Task 5: Migrate Tools to Unified Adapter (including edit and patch)
 
+Status: Completed on 2026-04-07 (`9241876`)
+
 **Files:**
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/tools/file_tools.py`
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/tools/edit.py`
@@ -383,7 +385,7 @@ git commit -m "feat(uri): standardize canonical scratchpad session uri format"
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/tools/read.py`
 - Test: `packages/mcp-scratchpad/tests/integration/test_tool_resource_consistency.py`
 
-- [ ] **Step 1: Add failing tests for session-aware edit/patch and tool-resource parity**
+- [x] **Step 1: Add failing tests for session-aware edit/patch and tool-resource parity**
 
 ```python
 def test_edit_requires_session_context(client):
@@ -400,7 +402,7 @@ def test_patch_writes_visible_to_resource_read(client, session_id):
     assert "world" in content
 ```
 
-- [ ] **Step 2: Run tests to verify red**
+- [x] **Step 2: Run tests to verify red**
 
 Run:
 ```bash
@@ -410,7 +412,7 @@ uv run pytest tests/integration/test_tool_resource_consistency.py -q
 
 Expected: FAIL for missing session-aware wiring.
 
-- [ ] **Step 3: Route tool operations through adapter and require session for mutating tools**
+- [x] **Step 3: Route tool operations through adapter and require session for mutating tools**
 
 ```python
 # edit tool signature
@@ -429,7 +431,7 @@ async def patch(..., session_id: str | None = None, ...):
     adapter.apply_diff(session_id=session_id, path=file_path, diff_text=diff, expected_version=expected_version)
 ```
 
-- [ ] **Step 4: Re-run tests to green**
+- [x] **Step 4: Re-run tests to green**
 
 Run:
 ```bash
@@ -439,7 +441,7 @@ uv run pytest tests/integration/test_tool_resource_consistency.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/mcp-scratchpad/src/mcp_scratchpad/tools/file_tools.py \
