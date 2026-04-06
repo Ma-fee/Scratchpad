@@ -62,13 +62,15 @@
 
 ### Task 1: Add Feature Flags and Config Wiring
 
+Status: Completed on 2026-04-07 (`9d751ca`, `999e3c2`, `39ac3ed`)
+
 **Files:**
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/config/settings.py`
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/config/models.py`
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/config/loader.py`
 - Test: `packages/mcp-scratchpad/tests/unit/config/test_loader_standalone.py`
 
-- [ ] **Step 1: Write failing tests for new flag defaults and loading**
+- [x] **Step 1: Write failing tests for new flag defaults and loading**
 
 ```python
 def test_unified_overlay_flags_default_false() -> None:
@@ -97,7 +99,7 @@ overlay:
     assert cfg.rollout.canonical_uri_only is False
 ```
 
-- [ ] **Step 2: Run tests to verify failures**
+- [x] **Step 2: Run tests to verify failures**
 
 Run:
 ```bash
@@ -107,7 +109,7 @@ uv run pytest tests/unit/config/test_loader_standalone.py -q
 
 Expected: tests fail with missing config fields.
 
-- [ ] **Step 3: Implement minimal config fields and loader mapping**
+- [x] **Step 3: Implement minimal config fields and loader mapping**
 
 ```python
 # settings.py
@@ -130,7 +132,7 @@ class OverlayConfig(BaseModel):
     rollout: OverlayRolloutConfig = Field(default_factory=OverlayRolloutConfig)
 ```
 
-- [ ] **Step 4: Re-run tests and verify green**
+- [x] **Step 4: Re-run tests and verify green**
 
 Run:
 ```bash
@@ -140,7 +142,7 @@ uv run pytest tests/unit/config/test_loader_standalone.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/mcp-scratchpad/src/mcp_scratchpad/config/settings.py \
@@ -154,12 +156,14 @@ git commit -m "feat(config): add rollout feature flags for unified overlay migra
 
 ### Task 2: Introduce UnifiedSessionFSAdapter
 
+Status: Completed on 2026-04-07 (`c30ec5a`)
+
 **Files:**
 - Create: `packages/mcp-scratchpad/src/mcp_scratchpad/fs/unified_adapter.py`
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/fs/__init__.py`
 - Test: `packages/mcp-scratchpad/tests/unit/fs/test_unified_adapter.py`
 
-- [ ] **Step 1: Write failing adapter tests**
+- [x] **Step 1: Write failing adapter tests**
 
 ```python
 def test_builds_canonical_uri() -> None:
@@ -176,7 +180,7 @@ def test_read_prefers_session_overlay_when_unified_enabled() -> None:
     assert result.layer == "upper"
 ```
 
-- [ ] **Step 2: Run tests to verify red**
+- [x] **Step 2: Run tests to verify red**
 
 Run:
 ```bash
@@ -186,7 +190,7 @@ uv run pytest tests/unit/fs/test_unified_adapter.py -q
 
 Expected: FAIL, module/class missing.
 
-- [ ] **Step 3: Implement minimal adapter**
+- [x] **Step 3: Implement minimal adapter**
 
 ```python
 @dataclass
@@ -209,7 +213,7 @@ class UnifiedSessionFSAdapter:
         return f"scratchpad://{session_id}/{path.lstrip('/')}"
 ```
 
-- [ ] **Step 4: Re-run tests to green**
+- [x] **Step 4: Re-run tests to green**
 
 Run:
 ```bash
@@ -219,7 +223,7 @@ uv run pytest tests/unit/fs/test_unified_adapter.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/mcp-scratchpad/src/mcp_scratchpad/fs/unified_adapter.py \
@@ -757,4 +761,3 @@ git commit -m "docs(release): add unified overlay rollout and verification check
    - Canonical URI `scratchpad://{session_id}/{path}`
    - Feature flags use consistent names across tasks.
 3. Scope check passed: plan remains in one subsystem family (filesystem unification + protocol parity + rollout controls).
-
