@@ -220,12 +220,15 @@ def load_overlay_config(
 
     rollout_data = {}
     if overlay_section:
-        rollout_value = overlay_section.get("rollout", {}) or {}
-        if rollout_value and not isinstance(rollout_value, dict):
+        rollout_value = overlay_section.get("rollout", None)
+        if rollout_value is None:
+            rollout_data = {}
+        elif not isinstance(rollout_value, dict):
             raise ConfigValidationError(
                 f"Invalid config in '{found_path}': 'overlay.rollout' must be a mapping"
             )
-        rollout_data = rollout_value
+        else:
+            rollout_data = rollout_value
 
     try:
         overlay_config = OverlayConfig(mounts=mounts, rollout=rollout_data)

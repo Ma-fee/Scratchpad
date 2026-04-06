@@ -13,6 +13,8 @@ sys.path.insert(
 )
 
 import yaml
+import pytest
+from unittest.mock import patch
 
 from mcp_scratchpad.config.loader import (
     ENV_VAR_PATTERN,
@@ -24,7 +26,7 @@ from mcp_scratchpad.config.loader import (
     load_yaml_config,
 )
 from mcp_scratchpad.config.models import OverlayConfig
-from mcp_scratchpad.config.settings import config as settings_config
+from mcp_scratchpad.config.settings import ServerConfig
 
 
 def test_expand_env_vars_basic():
@@ -207,10 +209,13 @@ def test_load_overlay_config_from_file(tmp_path: Path):
 
 def test_feature_flags_default_false() -> None:
     """Test feature flag defaults are disabled."""
-    assert settings_config.feature_unified_overlay_fs is False
-    assert settings_config.feature_canonical_uri_only is False
-    assert settings_config.feature_event_driven_subscriptions is False
-    assert settings_config.feature_dual_write_legacy_store is False
+    with patch.dict(os.environ, {}, clear=True):
+        config = ServerConfig()
+
+    assert config.feature_unified_overlay_fs is False
+    assert config.feature_canonical_uri_only is False
+    assert config.feature_event_driven_subscriptions is False
+    assert config.feature_dual_write_legacy_store is False
     print("✓ test_feature_flags_default_false passed")
 
 
@@ -266,6 +271,31 @@ overlay:
     assert cfg.rollout.event_driven_subscriptions is True
     assert cfg.rollout.dual_write_legacy_store is False
     print("✓ test_loader_reads_rollout_flags passed")
+
+
+def test_overlay_section_must_be_mapping(tmp_path: Path):
+    """The overlay section must be a mapping if provided."""
+    config_file = tmp_path / "scratchpad.yaml"
+    config_file.write_text(yaml.dump({"overlay": "not a mapping"}))
+
+    try:
+        load_overlay_config(config_file)
+        raise AssertionError("Should have raised ConfigValidationError")
+    except ConfigValidationError as e:
+        assert "overlay" in str(e)
+
+
+@pytest.mark.parametrize("value", [[], 0, False, ""])
+def test_overlay_rollout_must_be_mapping(tmp_path: Path, value):
+    """Overlay rollout must be a mapping when defined."""
+    config_file = tmp_path / "scratchpad.yaml"
+    config_file.write_text(yaml.dump({"overlay": {"rollout": value}}))
+
+    try:
+        load_overlay_config(config_file)
+        raise AssertionError("Should have raised ConfigValidationError")
+    except ConfigValidationError as e:
+        assert "overlay.rollout" in str(e)
 
 
 def test_missing_file_returns_default_config(tmp_path: Path):
