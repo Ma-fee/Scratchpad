@@ -21,8 +21,11 @@ from typing import Any, Protocol
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
+from urllib.parse import urlparse
 
 from ..config.models import OverlayConfig
+from .backends import create_filesystem
+from .overlay import OverlayFileSystem
 
 
 @dataclass
@@ -139,7 +142,7 @@ class SessionFileSystemManager:
         """
         self.config: OverlayConfig = config
         self._default_session_ttl: timedelta | None = default_session_ttl
-        self._sessions: dict[str, MemoryFileSystem] = {}
+        self._sessions: dict[str, OverlayFileSystem] = {}
         self._session_metadata: dict[str, SessionMetadata] = {}
         self._mounts: dict[str, AbstractFileSystem] = {}
         self._mount_paths: dict[
@@ -154,29 +157,17 @@ class SessionFileSystemManager:
         Creates fsspec filesystems for each configured mount.
         Supports file:// URLs and local paths.
         """
-        from pathlib import Path
-
-        from fsspec.implementations.local import LocalFileSystem
-
         for mount in self.config.mounts:
-            source = mount.source
+            try:
+                fs = create_filesystem(mount)
+                self._mounts[mount.name] = fs
 
-            if source.startswith("file://"):
-                # Local filesystem
-                path = source[7:]
-                fs_path = Path(path)
-                if not fs_path.is_absolute():
-                    fs_path = fs_path.resolve()
-
-                try:
-                    # Create filesystem instance
-                    # Note: LocalFileSystem can be a singleton, so we store path separately
-                    fs = LocalFileSystem()
-                    # Store the base path in a separate dict
-                    self._mount_paths[mount.name] = str(fs_path)
-                    self._mounts[mount.name] = fs
-                except Exception as e:
-                    print(f"Warning: Failed to mount {mount.name} at {fs_path}: {e}")
+                # 向后兼容：保留 file:// mount 的源路径，供旧逻辑读取 _mount_paths。
+                if mount.source.startswith("file://"):
+                    parsed = urlparse(mount.source)
+                    self._mount_paths[mount.name] = parsed.path
+            except Exception as e:
+                print(f"Warning: Failed to mount {mount.name}: {e}")
 
     def _get_mount_for_path(self, path: str) -> tuple[str, AbstractFileSystem] | None:
         """Find the mount that handles a given path.
@@ -198,6 +189,19 @@ class SessionFileSystemManager:
         """Initialize session workspace directory structure."""
         if not fs.exists("/workspace"):
             fs.mkdir("/workspace")
+
+    def _build_lower_layers_for_session(self) -> list[AbstractFileSystem]:
+        """Build lower layers for per-session overlay instances."""
+        ro_mounts = [mount for mount in self.config.mounts if mount.mode == "ro"]
+        ro_mounts.sort(key=lambda mount: mount.priority, reverse=True)
+        lowers: list[AbstractFileSystem] = []
+
+        for mount in ro_mounts:
+            fs = self._mounts.get(mount.name)
+            if fs is not None:
+                lowers.append(fs)
+
+        return lowers
 
     def create_session(
         self,
@@ -225,10 +229,14 @@ class SessionFileSystemManager:
             meta["expires_at"] = now + effective_ttl
             meta["ttl_seconds"] = effective_ttl.total_seconds()
 
-        # Create isolated MemoryFileSystem for this session
-        fs = MemoryFileSystem()
-        self._init_session_workspace(fs)
-        self._sessions[session_id] = fs
+        # Create isolated overlay filesystem for this session
+        upper_fs = MemoryFileSystem()
+        self._init_session_workspace(upper_fs)
+        overlay_fs = OverlayFileSystem(
+            upper=upper_fs,
+            lowers=self._build_lower_layers_for_session(),
+        )
+        self._sessions[session_id] = overlay_fs
 
         # Track session metadata
         self._session_metadata[session_id] = SessionMetadata(
@@ -270,7 +278,7 @@ class SessionFileSystemManager:
 
         return meta
 
-    def get_session_fs(self, session_id: str) -> MemoryFileSystem | None:
+    def get_session_fs(self, session_id: str) -> OverlayFileSystem | None:
         """Get the filesystem instance for a session.
 
         Updates the last_accessed timestamp when session is accessed.
@@ -280,7 +288,7 @@ class SessionFileSystemManager:
             session_id: The session ID to look up.
 
         Returns:
-            MemoryFileSystem instance if session exists and not expired, None otherwise.
+            OverlayFileSystem instance if session exists and not expired, None otherwise.
         """
         # Check session exists and isn't expired via get_session
         meta = self.get_session(session_id)
@@ -313,24 +321,25 @@ class SessionFileSystemManager:
             return False
 
         fs = self._sessions[session_id]
+        upper_fs = fs.upper if isinstance(fs.upper, MemoryFileSystem) else None
 
-        # Clear MemoryFileSystem contents to free memory
-        if hasattr(fs, "store") and isinstance(fs.store, dict):
+        # Clear upper MemoryFileSystem contents to free memory
+        if upper_fs is not None and hasattr(upper_fs, "store") and isinstance(upper_fs.store, dict):
             try:
-                fs.store.clear()
+                upper_fs.store.clear()
             except (AttributeError, TypeError):
                 pass
 
         # Close any open file handles
-        if hasattr(fs, "_cache") and isinstance(fs._cache, dict):
+        if upper_fs is not None and hasattr(upper_fs, "_cache") and isinstance(upper_fs._cache, dict):
             try:
-                for file_handle in fs._cache.values():
+                for file_handle in upper_fs._cache.values():
                     try:
                         if hasattr(file_handle, "close"):
                             file_handle.close()
                     except (OSError, ValueError):
                         pass
-                fs._cache.clear()
+                upper_fs._cache.clear()
             except (AttributeError, TypeError):
                 pass
 
