@@ -18,10 +18,13 @@ from .resource_limits import (
     create_unlimited_enforcer,
 )
 from .session_manager import OverlayFileSystemProtocol, SessionFileSystemManager
+from .unified_adapter import UnifiedReadResult, UnifiedSessionFSAdapter
 
 __all__ = [
     "SessionFileSystemManager",
     "OverlayFileSystemProtocol",
+    "UnifiedSessionFSAdapter",
+    "UnifiedReadResult",
     "OverlayFileSystem",
     "MemoryPressureConfig",
     "MemoryPressureError",
