@@ -253,6 +253,27 @@ def _check_duplicate_priorities(mounts: list[MountConfig]) -> None:
         )
 
 
+class OverlayRolloutConfig(BaseModel):
+    """Rollout flags that control new overlay capabilities."""
+
+    unified_overlay_fs: bool = Field(
+        default=False,
+        description="Enable the new unified overlay filesystem stack",
+    )
+    canonical_uri_only: bool = Field(
+        default=False,
+        description="Require downstream tools to use canonical scratchpad URIs",
+    )
+    event_driven_subscriptions: bool = Field(
+        default=False,
+        description="Use event-driven subscriptions instead of polling",
+    )
+    dual_write_legacy_store: bool = Field(
+        default=False,
+        description="Dual-write files to the legacy store during migration",
+    )
+
+
 class OverlayConfig(BaseModel):
     """Root configuration model for overlay filesystem with multiple mounts.
 
@@ -283,6 +304,11 @@ class OverlayConfig(BaseModel):
     mounts: list[MountConfig] = Field(
         default_factory=list,
         description="List of mount configurations",
+    )
+
+    rollout: OverlayRolloutConfig = Field(
+        default_factory=OverlayRolloutConfig,
+        description="Rollout flags for overlay filesystem features",
     )
 
     @model_validator(mode="after")

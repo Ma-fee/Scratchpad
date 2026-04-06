@@ -24,6 +24,7 @@ from mcp_scratchpad.config.loader import (
     load_yaml_config,
 )
 from mcp_scratchpad.config.models import OverlayConfig
+from mcp_scratchpad.config.settings import config as settings_config
 
 
 def test_expand_env_vars_basic():
@@ -204,6 +205,15 @@ def test_load_overlay_config_from_file(tmp_path: Path):
     print("✓ test_load_overlay_config_from_file passed")
 
 
+def test_feature_flags_default_false() -> None:
+    """Test feature flag defaults are disabled."""
+    assert settings_config.feature_unified_overlay_fs is False
+    assert settings_config.feature_canonical_uri_only is False
+    assert settings_config.feature_event_driven_subscriptions is False
+    assert settings_config.feature_dual_write_legacy_store is False
+    print("✓ test_feature_flags_default_false passed")
+
+
 def test_expand_environment_variables_in_config(tmp_path: Path):
     """Test that environment variables are expanded in loaded config."""
     os.environ["TEST_MOUNT_PATH"] = "/tmp/test"
@@ -234,6 +244,28 @@ mounts:
     result = load_overlay_config(config_file)
     assert result.mounts[0].source == "file:///default/path"
     print("✓ test_use_default_values_in_env_vars passed")
+
+
+def test_loader_reads_rollout_flags(tmp_path: Path):
+    """Test loader parses rollout flag overrides from overlay section."""
+    config_file = tmp_path / "scratchpad.yaml"
+    config_file.write_text(
+        """
+overlay:
+  rollout:
+    unified_overlay_fs: true
+    canonical_uri_only: false
+    event_driven_subscriptions: true
+    dual_write_legacy_store: false
+""".strip()
+    )
+
+    cfg = load_overlay_config(config_file)
+    assert cfg.rollout.unified_overlay_fs is True
+    assert cfg.rollout.canonical_uri_only is False
+    assert cfg.rollout.event_driven_subscriptions is True
+    assert cfg.rollout.dual_write_legacy_store is False
+    print("✓ test_loader_reads_rollout_flags passed")
 
 
 def test_missing_file_returns_default_config(tmp_path: Path):

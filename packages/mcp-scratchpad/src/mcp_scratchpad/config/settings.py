@@ -44,6 +44,19 @@ class ServerConfig(BaseSettings):
     log_level: str = Field(default="INFO", description="Log level")
     log_format: str = Field(default="text", description="Log format (json/text)")
 
+    feature_unified_overlay_fs: bool = Field(
+        default=False, description="Enable unified overlay filesystem features"
+    )
+    feature_canonical_uri_only: bool = Field(
+        default=False, description="Require canonical scratchpad:// URIs"
+    )
+    feature_event_driven_subscriptions: bool = Field(
+        default=False, description="Use event-driven subscription paths"
+    )
+    feature_dual_write_legacy_store: bool = Field(
+        default=False, description="Dual-write changes to legacy store"
+    )
+
     @field_validator("transport")
     @classmethod
     def validate_transport(cls, v):

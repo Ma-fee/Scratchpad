@@ -188,8 +188,17 @@ def load_overlay_config(
         # File was found but then deleted (race condition)
         return OverlayConfig(mounts=[])
 
-    # Convert mounts list to MountConfig objects
-    mounts_data = config_dict.get("mounts", [])
+    overlay_section = config_dict.get("overlay")
+    if overlay_section is not None and not isinstance(overlay_section, dict):
+        raise ConfigValidationError(
+            f"Invalid config in '{found_path}': 'overlay' must be a mapping"
+        )
+
+    # Determine mounts list, preferring overlay section
+    overlay_mounts = overlay_section.get("mounts") if overlay_section else None
+    mounts_data = (
+        overlay_mounts if overlay_mounts is not None else config_dict.get("mounts", [])
+    )
 
     if not isinstance(mounts_data, list):
         raise ConfigValidationError(
@@ -213,8 +222,16 @@ def load_overlay_config(
 
         mounts.append(mount)
 
+    rollout_data = {}
+    if overlay_section:
+        rollout_data = overlay_section.get("rollout", {}) or {}
+        if rollout_data and not isinstance(rollout_data, dict):
+            raise ConfigValidationError(
+                f"Invalid config in '{found_path}': 'overlay.rollout' must be a mapping"
+            )
+
     try:
-        overlay_config = OverlayConfig(mounts=mounts)
+        overlay_config = OverlayConfig(mounts=mounts, rollout=rollout_data)
     except Exception as e:
         raise ConfigValidationError(
             f"Invalid overlay configuration in '{found_path}': {e}"
