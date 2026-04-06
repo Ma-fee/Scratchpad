@@ -307,12 +307,14 @@ git commit -m "feat(fs): back sessions with overlay filesystem instances"
 
 ### Task 4: Canonical URI Migration in Path Resolver and Response Metadata
 
+Status: Completed on 2026-04-07 (`8430286`)
+
 **Files:**
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/path_resolver.py`
 - Modify: `packages/mcp-scratchpad/src/mcp_scratchpad/tools/file_tools.py`
 - Test: `packages/mcp-scratchpad/tests/unit/test_path_resolver.py`
 
-- [ ] **Step 1: Write failing canonical URI tests**
+- [x] **Step 1: Write failing canonical URI tests**
 
 ```python
 def test_build_uri_requires_session_and_returns_canonical() -> None:
@@ -327,7 +329,7 @@ def test_parse_uri_accepts_legacy_form_for_compat() -> None:
     assert path == "/reports/a.md"
 ```
 
-- [ ] **Step 2: Run tests to verify red**
+- [x] **Step 2: Run tests to verify red**
 
 Run:
 ```bash
@@ -337,7 +339,7 @@ uv run pytest tests/unit/test_path_resolver.py -q
 
 Expected: FAIL with old signature/behavior.
 
-- [ ] **Step 3: Implement canonical URI helpers and compatibility parser**
+- [x] **Step 3: Implement canonical URI helpers and compatibility parser**
 
 ```python
 def build_uri(relative_path: str, session_id: str) -> str:
@@ -345,13 +347,13 @@ def build_uri(relative_path: str, session_id: str) -> str:
     return f"scratchpad://{session_id}/{clean_path}"
 ```
 
-- [ ] **Step 4: Update tool responses to emit canonical URI only**
+- [x] **Step 4: Update tool responses to emit canonical URI only**
 
 ```python
 structured["uri"] = build_uri(record.file_path, session_id=get_store().session_id)
 ```
 
-- [ ] **Step 5: Re-run tests**
+- [x] **Step 5: Re-run tests**
 
 Run:
 ```bash
@@ -361,7 +363,7 @@ uv run pytest tests/unit/test_path_resolver.py -q
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/mcp-scratchpad/src/mcp_scratchpad/path_resolver.py \
