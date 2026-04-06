@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from .utils import normalize_path
 
@@ -97,7 +98,7 @@ def resolve_file_path(
         PathResolutionError: If path cannot be resolved or is invalid
     """
     # Parse URI if present
-    scheme, path = parse_uri(path_input)
+    scheme, path = _parse_uri_for_store(path_input, store.session_id)
 
     # Currently only scratchpad scheme is supported
     if scheme != "scratchpad":
@@ -195,18 +196,53 @@ def get_relative_path(
         return str(full_path).replace("\\", "/")
 
 
-def build_uri(relative_path: str) -> str:
-    """Build a scratchpad:// URI from a relative path.
+def build_uri(relative_path: str, session_id: str) -> str:
+    """Build a canonical scratchpad:// URI from a relative path.
 
     Args:
         relative_path: Relative path within scratchpad
+        session_id: Session identifier used in canonical URI host segment
 
     Returns:
-        URI string like "scratchpad:///path/to/file"
+        URI string like "scratchpad://{session_id}/path/to/file"
     """
-    # Ensure path doesn't have leading / (will be added in URI format)
+    # Ensure path doesn't have leading / (canonical path is host + normalized path)
     clean_path = relative_path.lstrip("/")
-    return f"scratchpad:///{clean_path}"
+    return f"scratchpad://{session_id}/{clean_path}"
+
+
+def _parse_uri_for_store(path_input: str, session_id: str | None) -> tuple[str, str]:
+    """Parse URI/path with canonical-session compatibility.
+
+    Canonical form:
+      - scratchpad://{session_id}/{path}
+
+    Legacy-compatible forms:
+      - scratchpad:///path
+      - scratchpad://path/to/file
+    """
+    scheme, path = parse_uri(path_input)
+    if scheme != "scratchpad":
+        return scheme, path
+
+    if not path_input.startswith("scratchpad://"):
+        return scheme, path
+
+    parsed = urlparse(path_input)
+    authority = parsed.netloc
+    parsed_path = parsed.path or "/"
+
+    # Triple-slash legacy URI: scratchpad:///path
+    if not authority:
+        return scheme, parsed_path
+
+    # Canonical URI for current session: scratchpad://{session_id}/{path}
+    if session_id and authority == session_id:
+        return scheme, parsed_path
+
+    # Legacy compatibility: scratchpad://path/to/file
+    merged_path = f"/{authority}{parsed_path}"
+    return scheme, merged_path
 
 
 def get_path_description() -> str:
@@ -217,6 +253,7 @@ def get_path_description() -> str:
         "Path to the file. Supports: "
         "(1) Relative path (e.g., 'reports/file.txt') - resolved relative to session directory; "
         "(2) Absolute path from session root (e.g., '/reports/file.txt'); "
-        "(3) URI format (e.g., 'scratchpad:///reports/file.txt'). "
-        "Use URI format for maximum clarity."
+        "(3) Canonical URI format (e.g., 'scratchpad://<session_id>/reports/file.txt'); "
+        "(4) Legacy URI format (e.g., 'scratchpad:///reports/file.txt'). "
+        "Canonical URI is preferred."
     )

@@ -244,6 +244,7 @@ async def _list_files_tool(
     await ctx.report_progress(25, 100, "Fetching file list")
 
     all_records: list[FileRecord] = []
+    effective_session_id = session_id or get_store().session_id
     # Store extra metadata for overlay files: file_path -> {line_count, uri}
     extra_metadata: dict[str, dict[str, Any]] = {}
 
@@ -276,7 +277,7 @@ async def _list_files_tool(
 
                 # Scan this mount's filesystem
                 mount_files = _list_local_fs_recursive(
-                    fs, mount_path, mount.mount_point
+                    fs, mount_path, mount.mount_point, effective_session_id
                 )
 
                 # Convert to FileRecord objects
@@ -407,7 +408,7 @@ def _list_overlay_files_recursive(
 
 
 def _list_local_fs_recursive(
-    fs: Any, base_path: str, mount_point: str
+    fs: Any, base_path: str, mount_point: str, session_id: str | None = None
 ) -> dict[str, dict[str, Any]]:
     """List files from a local filesystem mount.
 
@@ -448,8 +449,9 @@ def _list_local_fs_recursive(
                 except Exception:
                     pass
 
-                # Build URI
-                uri = f"scratchpad://{full_path}"
+                # Build canonical URI
+                effective_session_id = session_id or get_store().session_id
+                uri = build_uri(full_path, session_id=effective_session_id)
 
                 result[full_path] = {
                     "name": str(path),
@@ -580,7 +582,7 @@ async def _write_file_tool(
     structured.update({"operation": operation})
 
     # Add URI for the written file
-    structured["uri"] = build_uri(record.file_path)
+    structured["uri"] = build_uri(record.file_path, session_id=get_store().session_id)
 
     # 转换为 XML
     xml_content = build_file_operation_xml(structured, "write")
@@ -654,7 +656,7 @@ async def _remove_file_tool(
         "deleted_by": "user",
         "persistent_before": removed.persistent,
         "version": removed.version,
-        "uri": build_uri(removed.file_path),
+        "uri": build_uri(removed.file_path, session_id=get_store().session_id),
     }
 
     # 转换为 XML

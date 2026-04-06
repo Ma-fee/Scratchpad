@@ -32,6 +32,12 @@ class TestParseUri:
         assert scheme == "scratchpad"
         assert path == "/path/to/file"
 
+    def test_parse_scratchpad_uri_canonical_session_scoped(self):
+        """Parse canonical scratchpad://{session_id}/{path} URI."""
+        scheme, path = parse_uri("scratchpad://sess-1/reports/file.txt")
+        assert scheme == "scratchpad"
+        assert path == "/sess-1/reports/file.txt"
+
     def test_parse_scratchpad_uri_with_extra_slashes(self):
         """Parse scratchpad://///path/to/file"""
         scheme, path = parse_uri("scratchpad://///path/to/file")
@@ -139,15 +145,15 @@ class TestGetRelativePath:
 class TestBuildUri:
     """Test URI building."""
 
-    def test_build_uri_simple(self):
-        """Build URI from simple path"""
-        uri = build_uri("reports/file.txt")
-        assert uri == "scratchpad:///reports/file.txt"
+    def test_build_uri_requires_session_and_returns_canonical(self):
+        """Build canonical session-scoped URI from simple path."""
+        uri = build_uri("reports/file.txt", session_id="sess-1")
+        assert uri == "scratchpad://sess-1/reports/file.txt"
 
     def test_build_uri_strips_leading_slash(self):
-        """Leading slash is stripped from path"""
-        uri = build_uri("/reports/file.txt")
-        assert uri == "scratchpad:///reports/file.txt"
+        """Leading slash is stripped from path."""
+        uri = build_uri("/reports/file.txt", session_id="sess-1")
+        assert uri == "scratchpad://sess-1/reports/file.txt"
 
 
 class TestGetPathDescription:
