@@ -287,7 +287,7 @@ def _apply_hunks(original_text: str, hunks: Iterable[UnifiedHunk]) -> ApplyDiffO
                         f"Diff context mismatch at line {cursor + 1}: "
                         f"expected original line '{original_lines[cursor]}', got line '{line_text}'\n"
                         f"<suggest>The exact context from line {offset + 1} to line {offset + limit}:```\n{original_line_content}```\n\n"
-                        f"you can fix the diff context by the exact context, or use `scratchpad_edit_file` to edit.</suggest>"
+                        f"you can fix the diff context by the exact context, or use `edit` to edit.</suggest>"
                     )
                 new_lines.append(line_text)
                 cursor += 1
@@ -310,7 +310,7 @@ def _apply_hunks(original_text: str, hunks: Iterable[UnifiedHunk]) -> ApplyDiffO
                         f"Diff context mismatch at line {cursor + 1}: "
                         f"expected original line '{original_lines[cursor]}', got line '{line_text}'\n"
                         f"<suggest>The exact context from line {offset + 1} to line {offset + limit}:```\n{original_line_content}```\n\n"
-                        f"you can fix the diff context by the exact context, or use `scratchpad_edit_file` to edit.</suggest>"
+                        f"you can fix the diff context by the exact context, or use `edit` to edit.</suggest>"
                     )
                 if remove_start is None:
                     remove_start = cursor + 1

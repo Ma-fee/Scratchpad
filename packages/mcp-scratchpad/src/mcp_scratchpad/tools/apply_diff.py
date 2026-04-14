@@ -1,17 +1,21 @@
 """ApplyPatchSimple tool - 简化版补丁工具（仅支持 Update）"""
 
-import os
+from __future__ import annotations
+
 import re
-from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastmcp import Context, FastMCP
 from fastmcp.tools.tool import ToolResult
 from pydantic import Field
 
 from ..exceptions import ValidationError
-from ..path_resolver import PathResolutionError, get_path_description, resolve_file_path
+from ..fs.unified_adapter import UnifiedSessionFSAdapter
+from ..path_resolver import get_path_description
 from ..storage import get_store
+
+if TYPE_CHECKING:
+    from ..fs.session_manager import SessionFileSystemManager
 
 
 def _clean_header_path(path: str) -> str:
@@ -110,7 +114,7 @@ def seek_sequence(
     return normalized
 
 
-def parse_update_chunks(diff: str, start_idx: int = 0) -> list[dict]:
+def parse_update_chunks(diff: str, start_idx: int = 0) -> list[dict]:  # noqa: C901
     """解析更新文件的 chunks"""
     lines = diff.splitlines()
     chunks = []
@@ -347,7 +351,69 @@ def derive_new_contents_from_chunks(file_path: str, chunks: list[dict]) -> str:
     return "\n".join(new_lines)
 
 
-def register_apply_diff(mcp: FastMCP):
+def derive_new_contents_from_content(
+    original_content: str,
+    file_path: str,
+    chunks: list[dict],
+) -> str:
+    """Derive updated content from in-memory content + parsed chunks."""
+    original_lines = original_content.strip().split("\n")
+    replacements = compute_replacements(original_lines, file_path, chunks)
+    new_lines = apply_replacements(original_lines, replacements)
+    if len(new_lines) == 0 or new_lines[-1] != "":
+        new_lines.append("")
+    return "\n".join(new_lines)
+
+
+def _build_adapter(
+    session_manager: SessionFileSystemManager | None,
+    adapter: UnifiedSessionFSAdapter | None = None,
+) -> UnifiedSessionFSAdapter:
+    """Build unified adapter for patch operations."""
+    if adapter is not None:
+        return adapter
+    return UnifiedSessionFSAdapter(
+        session_manager=session_manager,
+        store=get_store(),
+        unified_enabled=True,
+    )
+
+
+def apply_patch_with_session(
+    *,
+    session_id: str | None,
+    file_path: str | None,
+    diff: str | None,
+    session_manager: SessionFileSystemManager | None = None,
+    adapter: UnifiedSessionFSAdapter | None = None,
+) -> str:
+    """Apply patch using session-aware unified adapter."""
+    if not session_id:
+        raise ValueError("session_id is required")
+    if not file_path:
+        raise ValueError("file_path is required")
+    if not diff:
+        raise ValueError("diff is required")
+
+    active_adapter = _build_adapter(session_manager, adapter)
+    current = active_adapter.read_text(session_id, file_path)
+    chunks = parse_update_chunks(diff)
+    if not chunks:
+        raise ValueError("patch rejected: empty patch")
+
+    new_content = derive_new_contents_from_content(
+        current.content,
+        file_path,
+        chunks,
+    )
+    active_adapter.write_text(session_id, file_path, new_content)
+    return f"Success. Updated file: {file_path}"
+
+
+def register_apply_diff(
+    mcp: FastMCP,
+    session_manager: SessionFileSystemManager | None = None,
+) -> None:
     @mcp.tool(
         name="patch",
         description=(
@@ -399,6 +465,10 @@ def register_apply_diff(mcp: FastMCP):
                 description="The incremental modification content in unified diff format (UTF-8 encoded)."
             ),
         ],
+        session_id: Annotated[
+            str,
+            Field(description="Session ID for session-scoped patch operations"),
+        ],
         expected_version: Annotated[
             int | None,
             Field(
@@ -420,32 +490,11 @@ def register_apply_diff(mcp: FastMCP):
     ) -> ToolResult:
         """应用简化版补丁（仅支持 Update）"""
         try:
-            if not file_path:
-                raise ValueError("file_path is required")
-            try:
-                filepath = resolve_file_path(file_path, get_store())
-            except PathResolutionError as e:
-                raise ValueError(f"Invalid path: {e}")
-            # 检查文件是否存在
-            if not filepath.exists():
-                raise FileNotFoundError(f"File not found: {filepath}")
-            # 解析补丁
-            chunks = parse_update_chunks(diff)
-
-            if not chunks:
-                raise ValueError("patch rejected: empty patch")
-
-            # 从 chunks 推导新内容
-            new_content = derive_new_contents_from_chunks(str(filepath), chunks)
-
-            # 写入更新后的内容
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(new_content)
-
-            # 生成输出
-            output = f"Success. Updated file: {file_path}"
-
-            return output
-
+            return apply_patch_with_session(
+                session_id=session_id,
+                file_path=file_path,
+                diff=diff,
+                session_manager=session_manager,
+            )
         except Exception as e:
             raise ValueError(f"Error applying patch: {e}") from e

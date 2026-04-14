@@ -916,6 +916,7 @@ def read_resource(
             )
 
     # Get session filesystem
+    sm.ensure_session(session_id)
     fs = sm.get_session_fs(session_id)
     if fs is None:
         return ResourceReadResult(
@@ -1450,6 +1451,7 @@ def read_directory_resource(
         )
 
     # Get session filesystem
+    sm.ensure_session(session_id)
     fs = sm.get_session_fs(session_id)
     if fs is None:
         return DirectoryListingResult(
@@ -1947,6 +1949,7 @@ def get_file_metadata(
         )
 
     # Get session filesystem
+    sm.ensure_session(session_id)
     fs = sm.get_session_fs(session_id)
     if fs is None:
         return FileMetadataResult(
@@ -2135,6 +2138,7 @@ def read_file_chunk(
         )
 
     # Get session filesystem
+    sm.ensure_session(session_id)
     fs = sm.get_session_fs(session_id)
     if fs is None:
         return ResourceReadResult(

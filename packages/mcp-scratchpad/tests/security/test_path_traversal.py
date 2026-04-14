@@ -257,6 +257,14 @@ class TestSafePathOperations:
 
     @pytest.mark.security
     @pytest.mark.unit
+    def test_hyphenated_path_is_allowed(self, memory_overlay: OverlayFileSystem):
+        """Hyphens are valid path characters and should not be rejected."""
+        memory_overlay.pipe("/memory/users/user-42/summary.md", b"published")
+
+        assert memory_overlay.exists("/memory/users/user-42/summary.md") is True
+
+    @pytest.mark.security
+    @pytest.mark.unit
     def test_safe_special_chars_in_filename(self):
         """Safe special characters should be allowed"""
         # These are valid filename characters (not path separators)

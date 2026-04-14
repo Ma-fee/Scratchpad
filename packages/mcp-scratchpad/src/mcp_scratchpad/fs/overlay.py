@@ -23,7 +23,11 @@ from typing import TYPE_CHECKING
 
 from fsspec import AbstractFileSystem
 
-from .path_security import validate_path_within_bounds, PathTraversalError
+from .path_security import (
+    PathTraversalError,
+    UNSAFE_CHARS,
+    validate_path_within_bounds,
+)
 from .session_validator import (
     InvalidSessionError,
     SessionIsolationError,
@@ -160,6 +164,14 @@ def _normalize_path(path: str) -> str:
     return path
 
 
+def _path_for_upper_layer(fs: AbstractFileSystem, path: str) -> str:
+    """Adapt overlay paths for upper-layer implementations with a fixed prefix."""
+    normalized_path = _normalize_path(path)
+    if fs.__class__.__name__ == "DirFileSystem" and normalized_path != "/":
+        return normalized_path.lstrip("/")
+    return normalized_path
+
+
 def _validate_path_security(path: str, base_path: str | Path | None = None) -> None:
     """Validate path for security threats.
 
@@ -208,8 +220,7 @@ def _validate_path_security(path: str, base_path: str | Path | None = None) -> N
         )
 
     # Check for unsafe characters
-    unsafe_chars = set('<>"|?*\x00-\x1f')
-    if any(c in unsafe_chars for c in path):
+    if UNSAFE_CHARS.search(path):
         raise PathTraversalError(
             f"Path contains unsafe characters: {path}",
             path=path,
@@ -1365,6 +1376,7 @@ class OverlayFileSystem(AbstractFileSystem):
             >>> overlay.mkdir("/a/b/c", create_parents=True)
         """
         normalized_path = _normalize_path(path)
+        upper_path = _path_for_upper_layer(self.upper, normalized_path)
 
         # Check if directory already exists in upper layer
         if self._exists_in_layer(self.upper, normalized_path):
@@ -1375,14 +1387,14 @@ class OverlayFileSystem(AbstractFileSystem):
 
         if create_parents:
             # Create all parent directories as needed
-            self.upper.makedirs(normalized_path, exist_ok=False)
+            self.upper.makedirs(upper_path, exist_ok=False)
         else:
             # Check if parent directory exists
             parent = "/".join(normalized_path.split("/")[:-1]) or "/"
             if not self._exists_in_layer(self.upper, parent):
                 raise FileNotFoundError(f"Parent directory does not exist: {parent}")
             # Create single directory in upper layer
-            self.upper.mkdir(normalized_path, **kwargs)
+            self.upper.mkdir(upper_path, **kwargs)
 
     def makedirs(self, path: str, exist_ok: bool = False, **kwargs: Any) -> None:
         """Create a directory and all its parents in the upper layer.
@@ -1404,6 +1416,7 @@ class OverlayFileSystem(AbstractFileSystem):
             >>> overlay.makedirs("/a/b/c", exist_ok=True)
         """
         normalized_path = _normalize_path(path)
+        upper_path = _path_for_upper_layer(self.upper, normalized_path)
 
         # Check if directory already exists in upper layer
         if self._exists_in_layer(self.upper, normalized_path):
@@ -1420,7 +1433,7 @@ class OverlayFileSystem(AbstractFileSystem):
                 self._remove_whiteout(parent_path)
 
         # Create directory and all parents in upper layer only
-        self.upper.makedirs(normalized_path, exist_ok=False, **kwargs)
+        self.upper.makedirs(upper_path, exist_ok=False, **kwargs)
 
     def rename(self, path1: str, path2: str, **kwargs: Any) -> None:
         """Rename (move) a file from path1 to path2 with COW semantics.
