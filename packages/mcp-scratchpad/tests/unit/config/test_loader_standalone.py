@@ -273,6 +273,31 @@ overlay:
     print("✓ test_loader_reads_rollout_flags passed")
 
 
+def test_load_overlay_config_accepts_shared_memory_namespace_mapping(
+    tmp_path: Path,
+):
+    """Test loader parses top-level memory publish namespace config."""
+    config_path = tmp_path / "scratchpad.yaml"
+    config_path.write_text(
+        """
+overlay:
+  rollout: {}
+memory:
+  publish:
+    namespaces:
+      users:
+        backend: file
+        root: /tmp/shared-memory/users
+mounts: []
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config = load_overlay_config(config_path)
+    assert config.memory.publish.namespaces["users"].backend == "file"
+    print("✓ test_load_overlay_config_accepts_shared_memory_namespace_mapping passed")
+
+
 def test_overlay_section_must_be_mapping(tmp_path: Path):
     """The overlay section must be a mapping if provided."""
     config_file = tmp_path / "scratchpad.yaml"

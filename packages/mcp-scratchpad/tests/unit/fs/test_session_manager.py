@@ -206,6 +206,17 @@ class TestSessionCreation:
         assert meta is not None
         assert meta.metadata["ttl_seconds"] == 900.0  # 15 minutes
 
+    def test_create_session_root_listing_includes_workspace(self) -> None:
+        """Session overlay root should expose the initialized workspace directory."""
+        config = OverlayConfig()
+        manager = SessionFileSystemManager(config)
+
+        session_id = manager.create_session()
+        session_fs = manager.get_session_fs(session_id)
+
+        assert session_fs is not None
+        assert "workspace" in session_fs.ls("/", detail=False)
+
 
 class TestGetSession:
     """Tests for get_session method."""

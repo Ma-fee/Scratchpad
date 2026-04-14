@@ -194,6 +194,12 @@ def load_overlay_config(
             f"Invalid config in '{found_path}': 'overlay' must be a mapping"
         )
 
+    memory_section = config_dict.get("memory")
+    if memory_section is not None and not isinstance(memory_section, dict):
+        raise ConfigValidationError(
+            f"Invalid config in '{found_path}': 'memory' must be a mapping"
+        )
+
     mounts_data = config_dict.get("mounts", [])
 
     if not isinstance(mounts_data, list):
@@ -231,7 +237,11 @@ def load_overlay_config(
             rollout_data = rollout_value
 
     try:
-        overlay_config = OverlayConfig(mounts=mounts, rollout=rollout_data)
+        overlay_config = OverlayConfig(
+            mounts=mounts,
+            rollout=rollout_data,
+            memory=memory_section or {},
+        )
     except Exception as e:
         raise ConfigValidationError(
             f"Invalid overlay configuration in '{found_path}': {e}"

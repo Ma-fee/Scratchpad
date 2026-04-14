@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Generator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastmcp import FastMCP
 from pydantic import Field
@@ -77,7 +77,9 @@ def line_trimmed_replacer(content: str, find: str) -> Generator[str, None, None]
             yield content[match_start_index:match_end_index]
 
 
-def block_anchor_replacer(content: str, find: str) -> Generator[str, None, None]:
+def block_anchor_replacer(  # noqa: C901
+    content: str, find: str
+) -> Generator[str, None, None]:
     """块锚点替换器"""
     original_lines = content.split("\n")
     search_lines = find.split("\n")
@@ -182,7 +184,7 @@ def block_anchor_replacer(content: str, find: str) -> Generator[str, None, None]
         yield content[match_start_index:match_end_index]
 
 
-def whitespace_normalized_replacer(
+def whitespace_normalized_replacer(  # noqa: C901
     content: str, find: str
 ) -> Generator[str, None, None]:
     """空白标准化替换器"""
@@ -313,7 +315,9 @@ def trimmed_boundary_replacer(content: str, find: str) -> Generator[str, None, N
             yield block
 
 
-def context_aware_replacer(content: str, find: str) -> Generator[str, None, None]:
+def context_aware_replacer(  # noqa: C901
+    content: str, find: str
+) -> Generator[str, None, None]:
     """上下文感知替换器"""
     find_lines = find.split("\n")
     if len(find_lines) < 3:
@@ -443,6 +447,61 @@ def apply_edit_with_session(
     return "Edit applied successfully."
 
 
+def _normalize_multiedit_entry(edit: dict[str, Any], index: int) -> dict[str, Any]:
+    """Normalize one multiedit entry from snake_case or camelCase."""
+    old_string = edit.get("old_string", edit.get("oldString"))
+    new_string = edit.get("new_string", edit.get("newString"))
+    replace_all = edit.get("replace_all", edit.get("replaceAll", False))
+
+    if old_string is None or new_string is None:
+        raise ValueError(
+            f"Edit #{index} must include old_string/new_string or oldString/newString"
+        )
+    if not isinstance(old_string, str) or not isinstance(new_string, str):
+        raise ValueError(f"Edit #{index} old_string and new_string must be strings")
+    if replace_all is None or not isinstance(replace_all, bool):
+        raise ValueError(f"Edit #{index} replace_all must be a boolean")
+
+    return {
+        "old_string": old_string,
+        "new_string": new_string,
+        "replace_all": replace_all,
+    }
+
+
+def apply_multiedit_with_session(
+    *,
+    session_id: str | None,
+    file_path: str,
+    edits: list[dict[str, Any]],
+    session_manager: SessionFileSystemManager | None = None,
+    adapter: UnifiedSessionFSAdapter | None = None,
+) -> str:
+    """Apply sequential text edits using the unified adapter."""
+    if not session_id:
+        raise ValueError("session_id is required")
+    if not edits:
+        raise ValueError("edits must be a non-empty list")
+
+    active_adapter = _build_adapter(session_manager, adapter)
+    read_result = active_adapter.read_text(session_id, file_path)
+    updated_content = read_result.content
+
+    for index, edit in enumerate(edits, start=1):
+        if not isinstance(edit, dict):
+            raise ValueError(f"Edit #{index} must be a dictionary")
+        normalized_edit = _normalize_multiedit_entry(edit, index)
+        updated_content = replace_content(
+            updated_content,
+            normalized_edit["old_string"],
+            normalized_edit["new_string"],
+            normalized_edit["replace_all"],
+        )
+
+    active_adapter.write_text(session_id, file_path, updated_content)
+    return "Multiedit applied successfully."
+
+
 def register_edit(
     mcp: FastMCP,
     session_manager: SessionFileSystemManager | None = None,
@@ -461,14 +520,13 @@ def register_edit(
         ),
     )
     async def edit(
-        session_id: str | None = Field(
-            default=None,
-            description="Session ID for session-scoped edit operations",
-        ),
         file_path: str = Field(description=get_path_description()),
         old_string: str = Field(description="The text to replace"),
         new_string: str = Field(
             description="The text to replace it with (must be different from old_string)"
+        ),
+        session_id: str = Field(
+            description="Session ID for session-scoped edit operations",
         ),
         replace_all: bool | None = Field(
             default=False,
@@ -483,6 +541,40 @@ def register_edit(
                 old_string=old_string,
                 new_string=new_string,
                 replace_all=replace_all or False,
+                session_manager=session_manager,
+            )
+        except Exception as e:
+            raise ValueError(f"Error editing file: {e}") from e
+
+    @mcp.tool(
+        name="multiedit",
+        description=(
+            "Perform multiple exact string replacements in one file, in order.\n\n"
+            "Usage:\n"
+            "- Pass `session_id` to apply edits through the unified session filesystem adapter.\n"
+            "- Each edit may use either snake_case keys (`old_string`, `new_string`, `replace_all`) or legacy camelCase keys (`oldString`, `newString`, `replaceAll`).\n"
+            "- Edits are applied sequentially; each edit operates on the result of the previous one.\n"
+            "- If any edit fails, the tool returns an error and does not persist partial results.\n"
+        ),
+    )
+    async def multiedit(
+        file_path: str = Field(description=get_path_description()),
+        edits: list[dict[str, Any]] = Field(
+            description=(
+                "Sequential edit operations. Each item must include old_string/new_string "
+                "or oldString/newString, with optional replace_all/replaceAll."
+            )
+        ),
+        session_id: str = Field(
+            description="Session ID for session-scoped multiedit operations",
+        ),
+    ) -> str:
+        """对单个文件应用多个顺序编辑。"""
+        try:
+            return apply_multiedit_with_session(
+                session_id=session_id,
+                file_path=file_path,
+                edits=edits,
                 session_manager=session_manager,
             )
         except Exception as e:

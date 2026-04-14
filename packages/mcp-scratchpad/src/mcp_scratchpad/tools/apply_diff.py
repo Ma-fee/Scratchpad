@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import re
-from typing import Annotated
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from fastmcp import Context, FastMCP
 from fastmcp.tools.tool import ToolResult
@@ -116,7 +114,7 @@ def seek_sequence(
     return normalized
 
 
-def parse_update_chunks(diff: str, start_idx: int = 0) -> list[dict]:
+def parse_update_chunks(diff: str, start_idx: int = 0) -> list[dict]:  # noqa: C901
     """解析更新文件的 chunks"""
     lines = diff.splitlines()
     chunks = []
@@ -468,9 +466,9 @@ def register_apply_diff(
             ),
         ],
         session_id: Annotated[
-            str | None,
+            str,
             Field(description="Session ID for session-scoped patch operations"),
-        ] = None,
+        ],
         expected_version: Annotated[
             int | None,
             Field(

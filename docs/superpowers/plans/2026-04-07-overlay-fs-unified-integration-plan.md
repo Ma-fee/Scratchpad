@@ -712,11 +712,13 @@ git commit -m "feat(migration): add rollout flags, dual-write controls, and heal
 
 ### Task 10: Full Verification Gate and Release Candidate Checklist
 
+Status: Verification gate passed on 2026-04-07 (fresh `pytest -q`, `ruff check`, `mypy`)
+
 **Files:**
 - Modify: `packages/mcp-scratchpad/README.md`
 - Create: `packages/mcp-scratchpad/docs/current-behavior-user-guide.md` (if not present in branch)
 
-- [ ] **Step 1: Add release checklist documentation updates**
+- [x] **Step 1: Add release checklist documentation updates**
 
 ```markdown
 ## Unified Overlay Rollout Checklist
@@ -727,7 +729,7 @@ git commit -m "feat(migration): add rollout flags, dual-write controls, and heal
 5. Disable dual-write after consistency burn-in.
 ```
 
-- [ ] **Step 2: Run full verification suite**
+- [x] **Step 2: Run full verification suite**
 
 Run:
 ```bash

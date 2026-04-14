@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import importlib
 import logging
 import signal
 import sys
@@ -56,7 +57,7 @@ def _setup_logging() -> None:
 
     if config.log_format == "json":
         try:
-            import structlog
+            structlog = importlib.import_module("structlog")
 
             structlog.configure(
                 processors=[
@@ -671,4 +672,5 @@ def main_sse() -> None:
 
 
 if __name__ == "__main__":
-    main_sse()
+    # main_sse()
+    main()

@@ -20,12 +20,14 @@ from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 from fsspec import AbstractFileSystem
+from fsspec.implementations.dirfs import DirFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 from urllib.parse import urlparse
 
 from ..config.models import OverlayConfig
 from .backends import create_filesystem
 from .overlay import OverlayFileSystem
+from .session_validator import validate_session_id
 
 
 @dataclass
@@ -99,6 +101,43 @@ class OverlayFileSystemProtocol(Protocol):
         ...
 
 
+class SessionUpperDirFileSystem(DirFileSystem):
+    """DirFileSystem variant that accepts overlay-style absolute paths."""
+
+    @staticmethod
+    def _normalize_overlay_path(path: str) -> str:
+        if path.startswith("/") and path != "/":
+            return path.lstrip("/")
+        return path
+
+    def exists(self, path: str, **kwargs: Any) -> bool:
+        return super().exists(self._normalize_overlay_path(path), **kwargs)
+
+    def isdir(self, path: str) -> bool:
+        return super().isdir(self._normalize_overlay_path(path))
+
+    def isfile(self, path: str) -> bool:
+        return super().isfile(self._normalize_overlay_path(path))
+
+    def info(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        return super().info(self._normalize_overlay_path(path), **kwargs)
+
+    def ls(self, path: str, *args: Any, **kwargs: Any) -> list[Any]:
+        return super().ls(self._normalize_overlay_path(path), *args, **kwargs)
+
+    def mkdir(self, path: str, *args: Any, **kwargs: Any) -> None:
+        super().mkdir(self._normalize_overlay_path(path), *args, **kwargs)
+
+    def makedirs(self, path: str, *args: Any, **kwargs: Any) -> None:
+        super().makedirs(self._normalize_overlay_path(path), *args, **kwargs)
+
+    def open(self, path: str, *args: Any, **kwargs: Any) -> Any:
+        return super().open(self._normalize_overlay_path(path), *args, **kwargs)
+
+    def rm(self, path: str, *args: Any, **kwargs: Any) -> None:
+        super().rm(self._normalize_overlay_path(path), *args, **kwargs)
+
+
 class SessionFileSystemManager:
     """Manages per-session overlay filesystem instances with lifecycle tracking.
 
@@ -170,25 +209,64 @@ class SessionFileSystemManager:
                 print(f"Warning: Failed to mount {mount.name}: {e}")
 
     def _get_mount_for_path(self, path: str) -> tuple[str, AbstractFileSystem] | None:
-        """Find the mount that handles a given path.
+        """Find the best matching mount for a given path.
 
         Args:
-            path: The path to resolve (e.g., "/.claude/skills/python/skill.py")
+            path: The path to resolve (e.g., "/memory/shared/foo.txt")
 
         Returns:
             Tuple of (mount_name, filesystem) or None if no mount matches.
         """
-        # Find matching mount based on mount_point
-        for mount in self.config.mounts:
-            if path.startswith(mount.mount_point) or mount.mount_point == "/":
-                if mount.name in self._mounts:
-                    return mount.name, self._mounts[mount.name]
-        return None
+        best_match: tuple[str, AbstractFileSystem] | None = None
+        best_len = -1
 
-    def _init_session_workspace(self, fs: MemoryFileSystem) -> None:
+        for mount in self.config.mounts:
+            if mount.name not in self._mounts:
+                continue
+
+            mount_point = mount.mount_point.rstrip("/") or "/"
+            if mount_point == "/":
+                matched = True
+            else:
+                matched = path == mount_point or path.startswith(f"{mount_point}/")
+
+            if matched and len(mount_point) > best_len:
+                best_match = (mount.name, self._mounts[mount.name])
+                best_len = len(mount_point)
+
+        return best_match
+
+
+    def resolve_mount_path(self, path: str) -> tuple[AbstractFileSystem, str] | None:
+        """Resolve an overlay-visible path to a mounted filesystem path."""
+        mount_match = self._get_mount_for_path(path)
+        if mount_match is None:
+            return None
+
+        mount_name, fs = mount_match
+        mount = self.config.get_mount_by_name(mount_name)
+        if mount is None:
+            return None
+
+        mount_point = mount.mount_point.rstrip("/") or "/"
+        if mount_point == "/":
+            relative_path = path
+        else:
+            relative_path = path[len(mount_point) :]
+            relative_path = relative_path or "/"
+
+        if not relative_path.startswith("/"):
+            relative_path = f"/{relative_path}"
+
+        return fs, relative_path
+
+    def _init_session_workspace(self, fs: AbstractFileSystem) -> None:
         """Initialize session workspace directory structure."""
         if not fs.exists("/workspace"):
-            fs.mkdir("/workspace")
+            workspace_path = (
+                "workspace" if isinstance(fs, DirFileSystem) else "/workspace"
+            )
+            fs.mkdir(workspace_path)
 
     def _build_lower_layers_for_session(self) -> list[AbstractFileSystem]:
         """Build lower layers for per-session overlay instances."""
@@ -230,7 +308,10 @@ class SessionFileSystemManager:
             meta["ttl_seconds"] = effective_ttl.total_seconds()
 
         # Create isolated overlay filesystem for this session
-        upper_fs = MemoryFileSystem()
+        upper_fs = SessionUpperDirFileSystem(
+            path=f"/__sessions__/{session_id}",
+            fs=MemoryFileSystem(),
+        )
         self._init_session_workspace(upper_fs)
         overlay_fs = OverlayFileSystem(
             upper=upper_fs,
@@ -248,6 +329,60 @@ class SessionFileSystemManager:
         self._last_accessed[session_id] = now
 
         return session_id
+
+    def ensure_session(
+        self,
+        session_id: str,
+        metadata: dict[str, Any] | None = None,
+        ttl: timedelta | None = None,
+    ) -> str:
+        """Ensure a specific session ID exists and return it.
+
+        If the session already exists, refresh access metadata and return the same ID.
+        Otherwise create a new session bound to the provided identifier.
+
+        Args:
+            session_id: Session ID that should exist.
+            metadata: Optional dictionary of custom session metadata.
+            ttl: Optional TTL for this session (overrides default).
+
+        Returns:
+            The ensured session ID.
+        """
+        normalized_session_id = validate_session_id(session_id.strip())
+        existing = self.get_session(normalized_session_id)
+        if existing is not None:
+            if metadata:
+                existing.metadata.update(metadata)
+            return normalized_session_id
+
+        now = datetime.now()
+        meta: dict[str, Any] = metadata.copy() if metadata else {}
+
+        effective_ttl = ttl if ttl is not None else self._default_session_ttl
+        if effective_ttl is not None:
+            meta["expires_at"] = now + effective_ttl
+            meta["ttl_seconds"] = effective_ttl.total_seconds()
+
+        upper_fs = SessionUpperDirFileSystem(
+            path=f"/__sessions__/{normalized_session_id}",
+            fs=MemoryFileSystem(),
+        )
+        self._init_session_workspace(upper_fs)
+        overlay_fs = OverlayFileSystem(
+            upper=upper_fs,
+            lowers=self._build_lower_layers_for_session(),
+        )
+        self._sessions[normalized_session_id] = overlay_fs
+        self._session_metadata[normalized_session_id] = SessionMetadata(
+            session_id=normalized_session_id,
+            created_at=now,
+            last_accessed=now,
+            metadata=meta,
+        )
+        self._last_accessed[normalized_session_id] = now
+
+        return normalized_session_id
 
     def get_session(self, session_id: str) -> SessionMetadata | None:
         """Get session metadata with expiration check.
@@ -321,27 +456,14 @@ class SessionFileSystemManager:
             return False
 
         fs = self._sessions[session_id]
-        upper_fs = fs.upper if isinstance(fs.upper, MemoryFileSystem) else None
+        upper_fs = fs.upper
 
-        # Clear upper MemoryFileSystem contents to free memory
-        if upper_fs is not None and hasattr(upper_fs, "store") and isinstance(upper_fs.store, dict):
-            try:
-                upper_fs.store.clear()
-            except (AttributeError, TypeError):
-                pass
-
-        # Close any open file handles
-        if upper_fs is not None and hasattr(upper_fs, "_cache") and isinstance(upper_fs._cache, dict):
-            try:
-                for file_handle in upper_fs._cache.values():
-                    try:
-                        if hasattr(file_handle, "close"):
-                            file_handle.close()
-                    except (OSError, ValueError):
-                        pass
-                upper_fs._cache.clear()
-            except (AttributeError, TypeError):
-                pass
+        if isinstance(upper_fs, DirFileSystem) and isinstance(
+            upper_fs.fs, MemoryFileSystem
+        ):
+            self._clear_memory_dirfs_prefix(upper_fs)
+        elif isinstance(upper_fs, MemoryFileSystem):
+            self._clear_memory_filesystem(upper_fs)
 
         # Remove session from all tracking dictionaries
         del self._sessions[session_id]
@@ -349,6 +471,60 @@ class SessionFileSystemManager:
         self._session_metadata.pop(session_id, None)
 
         return True
+
+    @staticmethod
+    def _clear_memory_filesystem(fs: MemoryFileSystem) -> None:
+        """Best-effort cleanup for an in-memory filesystem."""
+        if hasattr(fs, "store") and isinstance(fs.store, dict):
+            try:
+                fs.store.clear()
+            except (AttributeError, TypeError):
+                pass
+
+        if hasattr(fs, "_cache") and isinstance(fs._cache, dict):
+            try:
+                for file_handle in fs._cache.values():
+                    try:
+                        if hasattr(file_handle, "close"):
+                            file_handle.close()
+                    except (OSError, ValueError):
+                        pass
+                fs._cache.clear()
+            except (AttributeError, TypeError):
+                pass
+
+    @staticmethod
+    def _clear_memory_dirfs_prefix(fs: DirFileSystem) -> None:
+        """Delete only the files and directories under a DirFileSystem prefix."""
+        inner_fs = fs.fs
+        root = fs.path.rstrip("/")
+        prefix = f"{root}/" if root else ""
+
+        if hasattr(inner_fs, "store") and isinstance(inner_fs.store, dict):
+            for path in list(inner_fs.store):
+                if path == root or path.startswith(prefix):
+                    inner_fs.store.pop(path, None)
+
+        pseudo_dirs = getattr(inner_fs, "pseudo_dirs", None)
+        if isinstance(pseudo_dirs, list):
+            inner_fs.pseudo_dirs = [
+                path
+                for path in pseudo_dirs
+                if path != root and not path.startswith(prefix)
+            ]
+
+        cache = getattr(inner_fs, "_cache", None)
+        if isinstance(cache, dict):
+            try:
+                for file_handle in cache.values():
+                    try:
+                        if hasattr(file_handle, "close"):
+                            file_handle.close()
+                    except (OSError, ValueError):
+                        pass
+                inner_fs._cache.clear()
+            except (AttributeError, TypeError):
+                pass
 
     def list_sessions(
         self,

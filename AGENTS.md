@@ -1,164 +1,33 @@
-# Agentic Coding Instructions
+# Repository Guidelines
 
-## Project Overview
+## Project Structure & Module Organization
 
-Python monorepo using `uv` for dependency management. Main package: `mcp-scratchpad` - a FastMCP-based file management server.
+This repository is a Python monorepo managed with `uv`. Shared workspace settings live in [`pyproject.toml`](/Users/admin/Downloads/scratchpad/.worktrees/overlay-fs-integration-spec/pyproject.toml). Primary code is split across `packages/`, with package-specific source, tests, and docs kept together. Example packages include `packages/xeno-parser`, `packages/xeno-ner`, `packages/xeno-serve`, `packages/mineru-api`, and `packages/mcp-scratchpad`. Root-level app code lives in `src/iroot_llm/`. Design notes and planning artifacts live in `docs/` and `.sisyphus/`.
 
-- Python version: 3.10
-- Package manager: `uv` (REQUIRED for all operations)
-- Main package: `packages/mcp-scratchpad/`
+## Build, Test, and Development Commands
 
-## Build/Test/Lint Commands
+Use `uv` for all dependency and run commands.
 
-### Setup (always use `uv`)
-```bash
-cd packages/mcp-scratchpad
-uv sync                          # Install deps (auto-creates venv)
-uv sync --group test --group dev # With all groups
-```
+- `uv sync`: install root workspace dependencies
+- `uv run pytest`: run tests for the current project if configured
+- `uv run ruff check .`: run lint checks
+- `uv run mypy src`: run type checks for root code
+- `cd packages/mcp-scratchpad && uv sync`: install the standalone `mcp-scratchpad` environment
+- `cd packages/mcp-scratchpad && uv run pytest`: run `mcp-scratchpad` tests
+- `cd packages/mcp-scratchpad && uv run mcp-scratchpad --transport stdio`: start the MCP server locally
 
-### Running Tests
-```bash
-# Run all tests
-uv run pytest
+## Coding Style & Naming Conventions
 
-# Run single test (CRITICAL for debugging)
-uv run pytest tests/unit/test_storage.py::TestFileSystemStore::test_write_file_success
+Target Python 3.10+ syntax and prefer explicit type annotations. Use `snake_case` for functions, variables, and modules, `PascalCase` for classes, and `UPPER_SNAKE_CASE` for constants. Follow Ruff and MyPy settings defined in each package. Keep imports grouped as stdlib, third-party, then local. Use short comments only where logic is not obvious.
 
-# By marker
-uv run pytest -m unit           # Unit tests only
-uv run pytest -m integration    # Integration tests
-uv run pytest -m "not slow"     # Exclude slow tests
+## Testing Guidelines
 
-# Coverage
-uv run pytest --cov=src --cov-report=term-missing
-```
+Pytest is the standard test framework. Place tests beside the relevant package under `tests/unit`, `tests/integration`, or other existing suites such as `tests/security` and `tests/performance`. Name files `test_*.py` and test classes `Test*`. Run the narrowest useful test first, for example `uv run pytest tests/unit/test_storage.py::TestFileSystemStore::test_write_file_success`.
 
-### Linting and Formatting
-```bash
-uv run ruff check src/ tests/        # Lint
-uv run ruff check --fix src/ tests/  # Auto-fix
-uv run mypy src/                     # Type check
-uv run pre-commit run --all-files    # All pre-commit hooks
-```
+## Commit & Pull Request Guidelines
 
-### Running the Server
-```bash
-uv run mcp-scratchpad                                    # Stdio mode
-uv run mcp-scratchpad --transport sse --port 8890       # SSE mode
-uv run mcp-scratchpad --base-dir /path/to/files         # Custom base dir
-```
+Recent history uses Conventional Commit style such as `feat(fs): add unified session filesystem adapter` and `fix(config): tighten rollout validation`. Keep subjects imperative and scoped when possible. PRs should include a short summary, affected packages, verification commands run, and linked issues or plan docs. Add screenshots only for UI-facing changes.
 
-## Code Style Guidelines
+## Security & Configuration Tips
 
-### Import Style
-```python
-from __future__ import annotations  # Always include
-
-# Stdlib (alphabetical)
-import datetime
-from collections.abc import Generator
-from pathlib import Path
-from typing import Any
-
-# Third-party (alphabetical)
-from pydantic import BaseModel, Field, field_validator
-
-# Local (relative, alphabetical)
-from .exceptions import ValidationError
-from .models import FileRecord
-```
-
-### Type Annotations
-- Use Python 3.10+ syntax: `str | None` (NOT `Optional[str]`)
-- Use `dict[str, Any]` NOT `Dict[str, Any]`
-- Use `list[str]` NOT `List[str]`
-- Type hints required for all params and return types
-
-### Naming Conventions
-- Classes: `PascalCase` (e.g., `FileSystemStore`)
-- Functions/Variables: `snake_case` (e.g., `write_file`)
-- Private methods: `_single_leading_underscore`
-- Constants: `UPPER_SNAKE_CASE`
-- Exceptions: `SomethingError` suffix
-
-### Docstrings and Comments
-- Use `"""Description."""` for docstrings
-- Classes use verb phrases: `"""Represents..."""`, `"""Handles..."""`
-- Add inline comments in Chinese for non-obvious logic
-
-### Error Handling
-```python
-from .exceptions import FileTooLargeError, StorageError
-
-# Raise with details dict
-raise FileTooLargeError(
-    f"File {size} exceeds limit",
-    details={"file_path": path, "actual_size": size}
-)
-
-# Catch and wrap
-try:
-    operation()
-except OSError as e:
-    raise StorageError("Failed", details={"error": str(e)}) from e
-```
-
-### Code Formatting
-- Line length: 88 (Black/Ruff default)
-- Ruff rules: E, F, W, I, N, B, C90, UP
-- Ruff ignores: E501, B008
-
-### Pydantic Models
-```python
-class WriteFileRequest(BaseModel):
-    """Create or update file."""
-    session_id: str = Field(..., description="会话唯一标识")
-    expected_version: int | None = Field(None, ge=1, description="乐观锁版本")
-
-    @model_validator(mode="after")
-    def _validate_request(self) -> WriteFileRequest:
-        return self
-```
-
-### Testing Patterns
-```python
-class TestFileSystemStore:
-    """Test FileSystemStore"""
-
-    @pytest.mark.unit
-    def test_write_file_success(self, file_store: FileSystemStore):
-        """Test file writing"""
-        record = file_store.write_file(session_id="test", ...)
-        assert record.version == 1
-```
-
-### Project Structure
-```
-packages/mcp-scratchpad/
-├── src/mcp_scratchpad/
-│   ├── server.py           # FastMCP server entry
-│   ├── models.py           # Pydantic models
-│   ├── storage.py          # File storage logic
-│   ├── config/             # Configuration
-│   ├── exceptions/         # Custom exceptions
-│   ├── fs/                 # FS abstractions
-│   └── monitoring/         # Health checks
-└── tests/
-    ├── conftest.py         # pytest fixtures
-    ├── unit/               # Unit tests
-    └── integration/        # Integration tests
-```
-
-## Environment Variables
-
-All use `MCP_SCRATCHPAD_` prefix:
-- `MCP_SCRATCHPAD_LOG_LEVEL=DEBUG|INFO|WARNING|ERROR`
-- `MCP_SCRATCHPAD_LOG_FORMAT=text|json`
-- `MCP_SCRATCHPAD_BASE_DIR=/path`
-
-## Pre-Commit Hooks
-
-1. `uv-lock` - Update lock file
-2. `ruff-check --fix` - Lint with auto-fix
-3. `ruff-format` - Format code
+Do not commit secrets or local `.venv` artifacts. Prefer environment variables for runtime configuration. For `mcp-scratchpad`, use the `MCP_SCRATCHPAD_` prefix and remember that `packages/mcp-scratchpad` is excluded from the root `uv` workspace, so it must be managed from its own directory.

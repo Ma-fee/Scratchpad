@@ -51,6 +51,7 @@ class UnifiedSessionFSAdapter:
         normalized_path = normalize_path(path)
 
         if self._unified_enabled and self._session_manager is not None:
+            self._session_manager.ensure_session(session_id)
             session_fs = self._session_manager.get_session_fs(session_id)
             if session_fs is not None:
                 absolute_path = self._as_absolute_path(normalized_path)
@@ -77,6 +78,7 @@ class UnifiedSessionFSAdapter:
         uri = self.build_uri(session_id, normalized_path)
 
         if self._unified_enabled and self._session_manager is not None:
+            self._session_manager.ensure_session(session_id)
             session_fs = self._session_manager.get_session_fs(session_id)
             if session_fs is not None:
                 absolute_path = self._as_absolute_path(normalized_path)
@@ -93,6 +95,21 @@ class UnifiedSessionFSAdapter:
                         layer="upper",
                         version=None,
                     )
+
+                mount_result = self._session_manager.resolve_mount_path(absolute_path)
+                if mount_result is not None:
+                    mount_fs, mount_path = mount_result
+                    if mount_fs.exists(mount_path):
+                        with mount_fs.open(mount_path, mode="r", encoding="utf-8") as f:
+                            content = f.read()
+                        return UnifiedReadResult(
+                            session_id=session_id,
+                            path=normalized_path,
+                            uri=uri,
+                            content=content,
+                            layer="lower",
+                            version=None,
+                        )
 
         self._store.session_id = session_id
         records, failed = self._store.read_files([normalized_path])

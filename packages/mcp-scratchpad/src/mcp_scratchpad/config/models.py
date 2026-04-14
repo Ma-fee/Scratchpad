@@ -274,6 +274,27 @@ class OverlayRolloutConfig(BaseModel):
     )
 
 
+class SharedMemoryNamespaceConfig(BaseModel):
+    """Shared memory backend configuration for a single namespace."""
+
+    backend: Literal["file", "s3"]
+    root: str = Field(..., min_length=1)
+
+
+class SharedMemoryPublishConfig(BaseModel):
+    """Configuration for publish_memory namespace routing."""
+
+    namespaces: dict[str, SharedMemoryNamespaceConfig] = Field(default_factory=dict)
+
+
+class SharedMemoryConfig(BaseModel):
+    """Top-level shared memory configuration."""
+
+    publish: SharedMemoryPublishConfig = Field(
+        default_factory=SharedMemoryPublishConfig
+    )
+
+
 class OverlayConfig(BaseModel):
     """Root configuration model for overlay filesystem with multiple mounts.
 
@@ -309,6 +330,11 @@ class OverlayConfig(BaseModel):
     rollout: OverlayRolloutConfig = Field(
         default_factory=OverlayRolloutConfig,
         description="Rollout flags for overlay filesystem features",
+    )
+
+    memory: SharedMemoryConfig = Field(
+        default_factory=SharedMemoryConfig,
+        description="Shared memory publishing configuration",
     )
 
     @model_validator(mode="after")

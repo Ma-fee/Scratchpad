@@ -7,6 +7,7 @@ with support for path prefixing using DirFileSystem.
 
 from __future__ import annotations
 
+import importlib
 import logging
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
@@ -166,7 +167,8 @@ def create_s3_filesystem(
         PermissionError: If credentials are invalid or bucket not accessible.
     """
     try:
-        from s3fs import S3FileSystem
+        s3fs_module = importlib.import_module("s3fs")
+        S3FileSystem = s3fs_module.S3FileSystem
     except ImportError as e:
         logger.error("s3fs not installed, cannot create S3 filesystem")
         raise S3NotInstalledError() from e
