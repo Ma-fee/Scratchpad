@@ -103,12 +103,12 @@ def find_config_file(config_path: Path | str | None = None) -> Path | None:
     if config_path is not None:
         path = Path(config_path)
         if path.exists():
-            return path
+            return path.resolve()
         return None
 
     for location in STANDARD_CONFIG_LOCATIONS:
         if location.exists():
-            return location
+            return location.resolve()
 
     return None
 
@@ -200,6 +200,11 @@ def load_overlay_config(
             f"Invalid config in '{found_path}': 'memory' must be a mapping"
         )
 
+    session_upper_section = config_dict.get("session_upper")
+    if session_upper_section is not None and not isinstance(session_upper_section, dict):
+        raise ConfigValidationError(
+            f"Invalid config in '{found_path}': 'session_upper' must be a mapping"
+        )
     mounts_data = config_dict.get("mounts", [])
 
     if not isinstance(mounts_data, list):
@@ -241,6 +246,7 @@ def load_overlay_config(
             mounts=mounts,
             rollout=rollout_data,
             memory=memory_section or {},
+            session_upper=session_upper_section or {},
         )
     except Exception as e:
         raise ConfigValidationError(

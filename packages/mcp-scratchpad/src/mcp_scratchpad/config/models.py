@@ -295,6 +295,23 @@ class SharedMemoryConfig(BaseModel):
     )
 
 
+class SessionUpperConfig(BaseModel):
+    """Config for per-session writable upper-layer backend."""
+
+    backend: Literal["memory", "local"] = Field(
+        default="memory",
+        description="Writable upper layer backend for each session",
+    )
+    local_root: str = Field(
+        default="/tmp/mcp-scratchpad/sessions",
+        description="Host directory root used when backend=local",
+    )
+    preserve_on_cleanup: bool = Field(
+        default=False,
+        description="Keep session upper directory on cleanup when backend=local",
+    )
+
+
 class OverlayConfig(BaseModel):
     """Root configuration model for overlay filesystem with multiple mounts.
 
@@ -335,6 +352,11 @@ class OverlayConfig(BaseModel):
     memory: SharedMemoryConfig = Field(
         default_factory=SharedMemoryConfig,
         description="Shared memory publishing configuration",
+    )
+
+    session_upper: SessionUpperConfig = Field(
+        default_factory=SessionUpperConfig,
+        description="Per-session writable upper-layer backend configuration",
     )
 
     @model_validator(mode="after")

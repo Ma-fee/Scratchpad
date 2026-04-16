@@ -14,13 +14,16 @@ Architecture:
 
 from __future__ import annotations
 
+import shutil
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Protocol
 
 from fsspec import AbstractFileSystem
 from fsspec.implementations.dirfs import DirFileSystem
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
 from urllib.parse import urlparse
 
@@ -188,6 +191,11 @@ class SessionFileSystemManager:
             str, str
         ] = {}  # Store paths separately (LocalFileSystem is singleton)
         self._last_accessed: dict[str, datetime] = {}
+        self._session_upper_backend = self.config.session_upper.backend
+        self._session_upper_local_root = Path(self.config.session_upper.local_root)
+        self._session_upper_preserve_on_cleanup = (
+            self.config.session_upper.preserve_on_cleanup
+        )
         self._initialize_mounts()
 
     def _initialize_mounts(self) -> None:
@@ -268,6 +276,29 @@ class SessionFileSystemManager:
             )
             fs.mkdir(workspace_path)
 
+    def _build_session_upper_fs(self, session_id: str) -> AbstractFileSystem:
+        """Build writable upper filesystem for a session."""
+        if self._session_upper_backend == "local":
+            session_root = self._session_upper_local_root / session_id
+            session_root.mkdir(parents=True, exist_ok=True)
+            return SessionUpperDirFileSystem(
+                path=str(session_root),
+                fs=LocalFileSystem(auto_mkdir=True),
+            )
+
+        return SessionUpperDirFileSystem(
+            path=f"/__sessions__/{session_id}",
+            fs=MemoryFileSystem(),
+        )
+
+    def _clear_local_dirfs_prefix(self, fs: DirFileSystem) -> None:
+        """Delete local filesystem directory behind a DirFileSystem prefix."""
+        root = Path(fs.path)
+        if self._session_upper_preserve_on_cleanup:
+            return
+        if root.exists():
+            shutil.rmtree(root, ignore_errors=True)
+
     def _build_lower_layers_for_session(self) -> list[AbstractFileSystem]:
         """Build lower layers for per-session overlay instances."""
         ro_mounts = [mount for mount in self.config.mounts if mount.mode == "ro"]
@@ -308,10 +339,7 @@ class SessionFileSystemManager:
             meta["ttl_seconds"] = effective_ttl.total_seconds()
 
         # Create isolated overlay filesystem for this session
-        upper_fs = SessionUpperDirFileSystem(
-            path=f"/__sessions__/{session_id}",
-            fs=MemoryFileSystem(),
-        )
+        upper_fs = self._build_session_upper_fs(session_id)
         self._init_session_workspace(upper_fs)
         overlay_fs = OverlayFileSystem(
             upper=upper_fs,
@@ -364,10 +392,7 @@ class SessionFileSystemManager:
             meta["expires_at"] = now + effective_ttl
             meta["ttl_seconds"] = effective_ttl.total_seconds()
 
-        upper_fs = SessionUpperDirFileSystem(
-            path=f"/__sessions__/{normalized_session_id}",
-            fs=MemoryFileSystem(),
-        )
+        upper_fs = self._build_session_upper_fs(normalized_session_id)
         self._init_session_workspace(upper_fs)
         overlay_fs = OverlayFileSystem(
             upper=upper_fs,
@@ -462,6 +487,8 @@ class SessionFileSystemManager:
             upper_fs.fs, MemoryFileSystem
         ):
             self._clear_memory_dirfs_prefix(upper_fs)
+        elif isinstance(upper_fs, DirFileSystem):
+            self._clear_local_dirfs_prefix(upper_fs)
         elif isinstance(upper_fs, MemoryFileSystem):
             self._clear_memory_filesystem(upper_fs)
 

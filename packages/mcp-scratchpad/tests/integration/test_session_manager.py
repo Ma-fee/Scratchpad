@@ -27,6 +27,7 @@ import pytest
 from fsspec.implementations.memory import MemoryFileSystem
 
 from mcp_scratchpad.config.models import OverlayConfig
+from mcp_scratchpad.fs.overlay import OverlayFileSystem
 from mcp_scratchpad.fs.session_manager import SessionFileSystemManager, SessionMetadata
 
 
@@ -73,7 +74,7 @@ class TestSessionLifecycleIntegration:
         # Get filesystem and verify workspace exists
         fs = manager.get_session_fs(session_id)
         assert fs is not None
-        assert isinstance(fs, MemoryFileSystem)
+        assert isinstance(fs, OverlayFileSystem)
         assert fs.isdir("/workspace")
 
         # Write file operations
@@ -97,8 +98,8 @@ class TestSessionLifecycleIntegration:
 
         # List directory contents
         entries = fs.ls("/workspace", detail=False)
-        assert "/workspace/test.txt" in entries
-        assert "/workspace/project" in entries
+        assert "test.txt" in entries
+        assert "project" in entries
 
         # Cleanup session
         cleanup_result = manager.cleanup_session(session_id)
